@@ -50,40 +50,35 @@ Ketik `/up` di chat OpenCode untuk mengakses dashboard kontrol:
 
 ## ⚙️ Konfigurasi (Fine-Tuning)
 
-Anda dapat mengatur perilaku UltraPress melalui file konfigurasi OpenCode Anda. Berikut adalah opsi yang tersedia:
+Anda dapat mengatur perilaku UltraPress dengan menambahkan opsi di dalam file **`~/.config/opencode/opencode.json`** Anda. Masukkan konfigurasi sebagai argumen kedua dalam array plugin:
 
 ```jsonc
 {
-  "ultrapress": {
-    "enabled": true,
-    "notification": "minimal", // "off", "minimal", "detailed"
-    
-    // Layer 1
-    "outputFilter": {
-      "maxCharsPerOutput": 8000,
-      "teeSaveOnTruncate": true
-    },
-    
-    // Layer 2
-    "semantic": {
-      "mode": "nlp",
-      "compressUserMessages": true,
-      "protectCodeBlocks": true,
-      "minLengthChars": 200
-    },
-    
-    // Layer 3
-    "summarization": {
-      "maxContextLimit": 100000, // Ambang batas maksimal token
-      "minContextLimit": 50000,  // Ambang batas mulai pengingat
-      "nudgeFrequency": 5        // Seberapa sering bisikan muncul
-    },
-    
-    // Layer 4
-    "cleanup": {
-      "purgeErrors": { "enabled": true, "turns": 4 }
-    }
-  }
+  "plugin": [
+    [
+      "/path/ke/opencode-ultrapress",
+      {
+        "notification": "minimal", // "off", "minimal", "detailed"
+        
+        // Layer 1 - Output Filtering
+        "outputFilter": {
+          "maxCharsPerOutput": 8000
+        },
+        
+        // Layer 2 - Semantic Compression
+        "semantic": {
+          "mode": "nlp", // "nlp" (fast) or "llm" (smart)
+          "compressUserMessages": true
+        },
+        
+        // Layer 3 - Smart Summarization
+        "summarization": {
+          "maxContextLimit": 100000,
+          "nudgeFrequency": 5
+        }
+      }
+    ]
+  ]
 }
 ```
 
