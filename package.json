@@ -1,0 +1,46 @@
+{
+  "name": "@ultrapress/opencode-up",
+  "version": "0.1.0",
+  "description": "Extreme token compression plugin for OpenCode — 70-90% savings via RTK + DCP + Caveman techniques",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "ultrapress.schema.json",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "bun test",
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "opencode",
+    "plugin",
+    "compression",
+    "token",
+    "context",
+    "pruning",
+    "llm"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^25.7.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": "^1.14.48",
+    "zod": "^4.4.3"
+  }
+}
