@@ -5,6 +5,7 @@
 
 import type { SemanticConfig, SessionStats } from "../config/schema.js"
 import { compressNLP } from "../caveman/nlp.js"
+import { compressMLM } from "../caveman/mlm.js"
 import * as logger from "../utils/logger.js"
 import { formatSavings } from "../utils/token-count.js"
 
@@ -13,11 +14,11 @@ export interface Layer2Deps {
   stats: SessionStats
 }
 
-export function processMessageContext(
+export async function processMessageContext(
   content: string,
   role: "user" | "assistant" | "system" | "tool",
   deps: Layer2Deps
-): string {
+): Promise<string> {
   if (!deps.config.enabled) return content
 
   // Check role configuration
@@ -34,11 +35,10 @@ export function processMessageContext(
   try {
     let result: { compressedText: string; originalTokens: number; compressedTokens: number }
 
-    // In Phase 2 MVP we only have NLP mode
-    if (deps.config.mode === "nlp" || deps.config.mode === "mlm" || deps.config.mode === "llm") {
-      result = compressNLP(content)
+    if (deps.config.mode === "mlm") {
+      result = await compressMLM(content)
     } else {
-      return content
+      result = compressNLP(content)
     }
 
     const saved = result.originalTokens - result.compressedTokens

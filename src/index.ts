@@ -147,7 +147,7 @@ export async function server(ctx: any): Promise<Hooks> {
           const { nudgePrompt } = processTurnForDCP(output.message.content, { config: config.summarization, stats })
           
           // Apply Layer 2 compression
-          let content = processMessageContext(
+          let content = await processMessageContext(
              output.message.content, 
              output.message.role, 
              { config: config.semantic, stats }
