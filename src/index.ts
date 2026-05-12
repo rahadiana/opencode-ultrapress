@@ -11,6 +11,7 @@ import { processTurnForDCP, processCompactingHook } from "./layers/layer3-dcp.js
 import { compressToolDefinition } from "./dcp/compress-tool.js"
 import { applyCleanup, handleTurnTick } from "./layers/layer4-cleanup.js"
 import { handleSlashCommand } from "./commands/slash.js"
+import { estimateTokens } from "./utils/token-count.js"
 import * as logger from "./utils/logger.js"
 
 let config: UltraPressConfig
@@ -81,7 +82,29 @@ export async function server(_ctx: any): Promise<Hooks> {
      * Called before a user message is sent to LLM, or when LLM responds.
      * Good for tracking turns and Layer 2 Semantic compression (future).
      */
-    "chat.message": async (_input: any, output: any) => {
+    "chat.message": async (input: any, output: any) => {
+       const sessionID = input.sessionID
+
+       // SYNC HISTORY: If this is the first turn in this session for the plugin,
+       // we need to know the total token count of the entire history.
+       if (stats.totalTokensRaw === 0 && sessionID) {
+          try {
+             const session = await _ctx.client.session.get({ id: sessionID })
+             if (session && session.messages) {
+                let historyTokens = 0
+                for (const msg of session.messages) {
+                   if (typeof msg.content === "string") {
+                      historyTokens += estimateTokens(msg.content)
+                   }
+                }
+                stats.totalTokensRaw = historyTokens
+                logger.info(`[Sync] Synchronized history tokens: ${historyTokens}`)
+             }
+          } catch (e) {
+             logger.debug("[Sync] Failed to sync history tokens, will continue with turn-based count.")
+          }
+       }
+
        // Tick Layer 4 error purging
        const idsToPurge = handleTurnTick({ config: config.cleanup, stats })
        if (idsToPurge.length > 0) {
