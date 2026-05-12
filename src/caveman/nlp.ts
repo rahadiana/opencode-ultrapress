@@ -1,5 +1,5 @@
 /**
- * Caveman NLP Engine
+ * GSC Engine — Grammar Stripping Compression
  * Zero-dependency, rule-based semantic compression.
  */
 

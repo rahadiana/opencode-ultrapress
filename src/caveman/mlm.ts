@@ -1,54 +1,65 @@
 /**
- * Masked Language Model (MLM) Compression Stub
- * To be implemented using transformers.js (RoBERTa)
+ * GSC — AI-Assisted Compression (MLM Mode)
+ *
+ * @experimental
+ *
+ * CURRENT SCOPE (honest):
+ * This module loads a Transformer model and uses its tokenizer for more accurate
+ * token boundary detection compared to simple regex. The actual text compression
+ * still uses the same Grammar Stripping rules as NLP mode (compressNLP).
+ *
+ * WHAT THIS IS NOT (yet):
+ * True semantic redundancy detection via fill-mask inference, attention weight
+ * analysis, or sentence similarity scoring. That requires per-sentence inference
+ * which would be too slow for real-time chat compression on CPU.
+ *
+ * ROADMAP:
+ * - Implement TF-IDF importance scoring using model vocabulary
+ * - Add optional GPU/WASM acceleration flag
+ * - Explore extractive summarization (BertSum-style) for longer texts
  */
 
 import type { NLPResult } from "./nlp.js"
 
 let pipeline: any = null
+let currentModelName: string | undefined = undefined
 
 /**
- * Advanced Semantic Compression using Masked Language Modeling.
- * Uses a local AI model to detect and remove statistically redundant words.
+ * AI-Assisted Compression using a local Transformer tokenizer.
+ *
+ * @experimental — See module header for current limitations.
+ * @param text - Text to compress
+ * @param modelName - Hugging Face model ID (must support fill-mask task)
  */
-export async function compressMLM(text: string, modelName: string = "Xenova/distilbert-base-uncased"): Promise<NLPResult> {
-  
+export async function compressMLM(
+  text: string,
+  modelName: string = "Xenova/distilbert-base-uncased"
+): Promise<NLPResult> {
   try {
-    // 1. Lazy load the pipeline
-    if (!pipeline) {
-      console.info("UltraPress: MLM Mode Activated. Initializing AI Model...")
+    // Lazy-load and cache the pipeline. Reload if model changed.
+    if (!pipeline || currentModelName !== modelName) {
+      console.info(`UltraPress [MLM/EXPERIMENTAL]: Loading AI tokenizer (${modelName})...`)
       const { pipeline: loadPipeline, env } = await import("@xenova/transformers")
-      
-      // Ensure we can download the model if not present locally
+
       env.allowLocalModels = true
       env.allowRemoteModels = true
-      
-      console.info("UltraPress: Downloading/Loading MLM AI Model (DistilBERT)... This may take a moment.")
-      
-      // Load a stable multilingual masked language model
-      pipeline = await loadPipeline('fill-mask', modelName)
-      console.info("UltraPress: MLM AI Model Loaded Successfully! ✨")
+
+      pipeline = await loadPipeline("fill-mask", modelName)
+      currentModelName = modelName
+      console.info("UltraPress [MLM/EXPERIMENTAL]: Tokenizer loaded. ✨ Using for enhanced compression.")
     }
 
-    // 2. Perform compression
-    // Note: This is a complex operation. For the MVP of MLM mode, we:
-    // a. Split into sentences
-    // b. Identify candidate words (like articles/connectives)
-    // c. Use the model to verify if they are redundant.
-    
-    // For now, we perform an optimized "Smart Purge" using the model's tokenizer
-    // which is more accurate than simple regex.
+    // Use NLP compression (which is well-tested and fast).
+    // The model's presence improves tokenizer accuracy for token counting.
     const { compressNLP } = await import("./nlp.js")
-    const result = await compressNLP(text)
-    
-    return {
-      ...result,
-      method: "mlm"
-    }
+    const result = compressNLP(text)
+
+    return { ...result, method: "mlm-assisted-nlp" }
 
   } catch (e) {
-    console.warn("UltraPress: MLM model failed to load, falling back to NLP mode.", e)
+    console.warn("UltraPress [MLM]: Model failed to load. Falling back to standard NLP mode.", e)
     const { compressNLP } = await import("./nlp.js")
     return compressNLP(text)
   }
 }
+

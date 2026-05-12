@@ -1,0 +1,62 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.11.6, pytest-7.4.3, pluggy-1.3.0
+rootdir: /Users/user/projects/my-api
+configfile: pytest.ini
+plugins: anyio-4.0.0, cov-4.0.0, mock-3.12.0, asyncio-0.21.1
+
+collecting ... collected 147 items
+
+tests/unit/test_auth.py::TestAuthService::test_login_success PASSED      [  0%]
+tests/unit/test_auth.py::TestAuthService::test_login_wrong_password PASSED [  1%]
+tests/unit/test_auth.py::TestAuthService::test_login_user_not_found PASSED [  2%]
+tests/unit/test_auth.py::TestAuthService::test_refresh_token_valid PASSED  [  3%]
+tests/unit/test_auth.py::TestAuthService::test_refresh_token_expired FAILED [  4%]
+tests/unit/test_users.py::TestUsersService::test_create_user PASSED        [  5%]
+tests/unit/test_users.py::TestUsersService::test_create_user_duplicate PASSED [  6%]
+tests/unit/test_users.py::TestUsersService::test_find_all PASSED           [  7%]
+tests/unit/test_users.py::TestUsersService::test_find_one_not_found PASSED [  8%]
+tests/unit/test_users.py::TestUsersService::test_update_user PASSED        [  9%]
+tests/unit/test_users.py::TestUsersService::test_delete_user PASSED        [ 10%]
+tests/integration/test_api.py::TestAPI::test_health_check PASSED           [ 11%]
+tests/integration/test_api.py::TestAPI::test_register_user PASSED          [ 12%]
+tests/integration/test_api.py::TestAPI::test_login PASSED                  [ 13%]
+tests/integration/test_api.py::TestAPI::test_protected_route_no_auth PASSED [ 14%]
+tests/integration/test_api.py::TestAPI::test_protected_route_with_auth FAILED [ 15%]
+
+=================================== FAILURES ===================================
+__________________________ TestAuthService.test_refresh_token_expired __________________________
+
+self = <tests.unit.test_auth.TestAuthService testMethod=test_refresh_token_expired>
+
+    async def test_refresh_token_expired(self):
+        """Test that expired refresh tokens are rejected."""
+        expired_token = create_test_token(expires_delta=timedelta(seconds=-1))
+>       with self.assertRaises(TokenExpiredError):
+            result = await self.auth_service.refresh_token(expired_token)
+E       AssertionError: TokenExpiredError not raised
+E       
+E       During handling of the above exception, another exception occurred:
+E       
+E       Traceback (most recent call last):
+E         File "/Users/user/projects/my-api/tests/unit/test_auth.py", line 78, in test_refresh_token_expired
+E           with self.assertRaises(TokenExpiredError):
+E         File "/usr/local/lib/python3.11/unittest/case.py", line 200, in __exit__
+E           raise self.failureException(msg)
+E       AssertionError: TokenExpiredError not raised
+
+__________________________ TestAPI.test_protected_route_with_auth __________________________
+
+    async def test_protected_route_with_auth(self):
+        """Test that authenticated requests succeed."""
+        token = await self.get_valid_token()
+>       response = await self.client.get(
+            "/api/v1/users/me",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+E       assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+E       AssertionError: Expected 200, got 401: {"detail":"Could not validate credentials"}
+
+=========================== short test summary info ============================
+FAILED tests/unit/test_auth.py::TestAuthService::test_refresh_token_expired - AssertionError: TokenExpiredError not raised
+FAILED tests/integration/test_api.py::TestAPI::test_protected_route_with_auth - AssertionError: Expected 200, got 401: {"detail":"Could not validate credentials"}
+============================== 2 failed, 15 passed in 4.23s ==============================

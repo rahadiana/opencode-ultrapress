@@ -1,6 +1,6 @@
 /**
- * Layer 2 — Semantic Compression
- * Applies Caveman-style grammar stripping to natural language.
+ * Layer 2 — Semantic Compression (GSC: Grammar Stripping Compression)
+ * Applies rule-based or AI-assisted grammar stripping to natural language.
  */
 
 import type { SemanticConfig, SessionStats } from "../config/schema.js"

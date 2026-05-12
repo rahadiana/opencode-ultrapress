@@ -1,7 +1,15 @@
 {
   "name": "@ultrapress/opencode-up",
   "version": "0.1.0",
-  "description": "Extreme token compression plugin for OpenCode — 70-90% savings via RTK + DCP + Caveman techniques",
+  "description": "Token compression plugin for OpenCode AI — multi-layer filtering, semantic compression, and dynamic context pruning.",
+  "homepage": "https://github.com/rahadiana/opencode-ultrapress#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rahadiana/opencode-ultrapress.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rahadiana/opencode-ultrapress/issues"
+  },
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -21,7 +29,11 @@
     "dev": "tsup --watch",
     "test": "bun test",
     "lint": "tsc --noEmit",
+    "benchmark": "tsx benchmarks/run.ts",
     "prepublishOnly": "npm run build"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "keywords": [
     "opencode",
@@ -37,6 +49,7 @@
   "devDependencies": {
     "@types/node": "^25.7.0",
     "tsup": "^8.0.0",
+    "tsx": "^4.0.0",
     "typescript": "^5.4.0"
   },
   "dependencies": {
