@@ -19,7 +19,7 @@ let stats: SessionStats
 
 import { Hooks } from "@opencode-ai/plugin"
 import { join } from "path"
-import { readFile } from "fs/promises"
+import { readFile, writeFile, mkdir } from "fs/promises"
 import { homedir } from "os"
 
 /**
@@ -30,14 +30,27 @@ export async function server(ctx: any): Promise<Hooks> {
   let baseConfig = mergeConfig({})
   
   // 2. Try to load from ~/.config/opencode/ultrapress.json
-  const configPath = join(homedir(), ".config", "opencode", "ultrapress.json")
+  const configDir = join(homedir(), ".config", "opencode")
+  const configPath = join(configDir, "ultrapress.json")
+  
   try {
     const fileContent = await readFile(configPath, "utf-8")
     const externalConfig = JSON.parse(fileContent)
     baseConfig = mergeConfig(externalConfig)
     logger.info(`[Config] Loaded dedicated config from ${configPath}`)
-  } catch (e) {
-    logger.debug(`[Config] No dedicated ultrapress.json found at ${configPath}, using defaults.`)
+  } catch (e: any) {
+    if (e.code === "ENOENT") {
+       // Best Practice: Auto-create the config file if it doesn't exist
+       try {
+          await mkdir(configDir, { recursive: true })
+          await writeFile(configPath, JSON.stringify(baseConfig, null, 2), "utf-8")
+          logger.info(`[Config] Created best-practice configuration at ${configPath}`)
+       } catch (writeErr) {
+          logger.debug("[Config] Failed to auto-create config file, using in-memory defaults.")
+       }
+    } else {
+       logger.debug(`[Config] Error reading ultrapress.json, using defaults.`)
+    }
   }
 
   config = baseConfig
