@@ -28,11 +28,11 @@ export const DEFAULT_CONFIG: UltraPressConfig = {
   summarization: {
     enabled: true,
     mode: "range",
-    maxContextLimit: 100_000,
-    minContextLimit: 50_000,
+    maxContextLimit: 70_000,
+    minContextLimit: 40_000,
     nudgeFrequency: 5,
     summaryBuffer: true,
-    showCompression: false,
+    showCompression: true,
   },
 
   // Layer 4 - Auto Cleanup
