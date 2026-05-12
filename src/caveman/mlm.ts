@@ -4,7 +4,6 @@
  */
 
 import type { NLPResult } from "./nlp.js"
-import { estimateTokens } from "../utils/token-count.js"
 
 let pipeline: any = null
 
@@ -12,20 +11,22 @@ let pipeline: any = null
  * Advanced Semantic Compression using Masked Language Modeling.
  * Uses a local AI model to detect and remove statistically redundant words.
  */
-export async function compressMLM(text: string): Promise<NLPResult> {
-  const originalTokens = estimateTokens(text)
+export async function compressMLM(text: string, modelName: string = "Xenova/distilbert-base-uncased"): Promise<NLPResult> {
   
   try {
     // 1. Lazy load the pipeline
     if (!pipeline) {
-      console.info("UltraPress: Loading MLM AI Model (DistilBERT)... This may take a moment on first run.")
+      console.info("UltraPress: MLM Mode Activated. Initializing AI Model...")
       const { pipeline: loadPipeline, env } = await import("@xenova/transformers")
       
-      // Disable remote downloads of models if they exist locally
+      // Ensure we can download the model if not present locally
       env.allowLocalModels = true
+      env.allowRemoteModels = true
       
-      // Load a lightweight masked language model
-      pipeline = await loadPipeline('fill-mask', 'Xenova/distilbert-base-uncased')
+      console.info("UltraPress: Downloading/Loading MLM AI Model (DistilBERT)... This may take a moment.")
+      
+      // Load a stable multilingual masked language model
+      pipeline = await loadPipeline('fill-mask', modelName)
       console.info("UltraPress: MLM AI Model Loaded Successfully! ✨")
     }
 

@@ -14,6 +14,7 @@
   "semantic": {
     "enabled": true,
     "mode": "nlp",               // Pilihan: "nlp" (Rule-based) atau "mlm" (AI-based)
+    "model": "Xenova/distilbert-base-uncased", // Model AI (untuk mode mlm). Gunakan "Xenova/bert-base-multilingual-uncased" untuk Bahasa Indonesia.
     "compressUserMessages": true,
     "compressAssistantMessages": false,
     "compressToolOutputs": true,

@@ -11,6 +11,7 @@ export interface NLPResult {
   compressedText: string
   originalTokens: number
   compressedTokens: number
+  method?: string
 }
 
 function compressSentence(sentence: string): string {

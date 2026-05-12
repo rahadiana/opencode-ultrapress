@@ -18,7 +18,7 @@ Mencegat output dari tool CLI (git, bash, npm, docker, dll.) dan menyaring *nois
 ### 2. Layer 2: Semantic Compression (Caveman Mode)
 Mengompresi pesan chat secara semantik sebelum dikirim ke LLM.
 *   **NLP Mode (Default):** Menghapus filler words, grammar, dan artikel yang tidak penting berbasis aturan linguistik cepat.
-*   **MLM Mode (Advanced):** Menggunakan model AI lokal (DistilRoBERTa) untuk menghapus kata-kata dengan tingkat redundansi statistik tinggi (Ringan & Berbasis CPU — memerlukan instalasi `@xenova/transformers`).
+*   **MLM Mode (Advanced):** Menggunakan model AI lokal (Transformers.js) untuk menghapus kata-kata dengan tingkat redundansi statistik tinggi. Mendukung pemilihan model dinamis (English/Multilingual).
 *   **Technical Preservation:** Menjamin 100% keamanan untuk kode blok, `camelCase`, jalur file, dan konstanta teknis.
 *   **Contextual Logic:** Hanya mengompresi pesan yang panjang (>200 karakter) agar interaksi singkat tetap natural.
 
@@ -43,7 +43,7 @@ Ketik `/up` di chat OpenCode untuk mengakses dashboard kontrol:
 | `/up stats` | Menampilkan dashboard statistik penghematan token sesi ini |
 | `/up context` | Melihat detail kapasitas memori, batas limit, dan sisa token |
 | `/up compress` | Memaksa AI untuk melakukan peringkasan sejarah percakapan sekarang |
-| `/up mode <nlp\|llm>` | Mengubah agresivitas kompresi semantik Layer 2 |
+| `/up mode <nlp|mlm>` | Mengubah agresivitas kompresi semantik Layer 2 |
 | `/up filter <on\|off>` | Mengaktifkan/mematikan penyaringan output otomatis Layer 1 |
 | `/up manual <on\|off>` | Toggle mode manual (auto-summarization mati) |
 
@@ -67,6 +67,7 @@ UltraPress mendukung konfigurasi mandiri agar tidak bercampur dengan file `openc
   // Layer 2 - Semantic Compression (Caveman)
   "semantic": {
     "mode": "nlp", // "nlp" atau "mlm"
+    "model": "Xenova/distilbert-base-uncased", // Model AI (untuk mode mlm)
     "compressUserMessages": true
   },
   
@@ -82,13 +83,34 @@ UltraPress mendukung konfigurasi mandiri agar tidak bercampur dengan file `openc
 
 ---
 
+## 🧠 Pemilihan Model AI (MLM Mode)
+
+Saat menggunakan mode `mlm`, Anda dapat memilih model AI yang paling sesuai dengan kebutuhan bahasa dan performa hardware Anda. UltraPress menggunakan **Transformers.js** yang kompatibel dengan model berformat ONNX di Hugging Face.
+
+### Model yang Direkomendasikan:
+
+| Model ID | Ukuran | Deskripsi |
+| :--- | :--- | :--- |
+| `Xenova/distilbert-base-uncased` | ~130MB | **Default.** Sangat cepat, ringan, terbaik untuk Bahasa Inggris. |
+| `Xenova/bert-base-multilingual-uncased` | ~450MB | **Stabil.** Mendukung 102 bahasa (termasuk Indonesia). Sangat akurat. |
+| `Xenova/albert-base-v2` | ~45MB | **Ultra-Light.** Sangat hemat RAM, cocok untuk laptop lama. |
+
+### Rujukan Model Lainnya:
+Anda dapat mencari model lain yang mendukung tugas `fill-mask` di:
+👉 **[Hugging Face - Transformers.js Models](https://huggingface.co/models?library=transformers.js&pipeline_tag=fill-mask)**
+
+> [!IMPORTANT]
+> Pastikan model yang Anda pilih mendukung tugas **`fill-mask`** agar fitur kompresi semantik dapat berjalan.
+
+---
+
 ## 🤝 Kontribusi & Pengembangan
 
 UltraPress adalah proyek sumber terbuka yang sangat menghargai kontribusi komunitas. Kami mencari bantuan untuk:
 
-1.  **MLM Implementation:** Membantu mengaktifkan `@xenova/transformers` untuk kompresi semantik berbasis AI lokal yang lebih presisi.
-2.  **New Filters:** Menambahkan filter Layer 1 untuk framework baru (misal: Svelte, Flutter, Elixir).
-3.  **Benchmark:** Melakukan pengujian efisiensi pada model-model LLM yang berbeda.
+1.  **New Filters:** Menambahkan filter Layer 1 untuk framework baru (misal: Svelte, Flutter, Elixir).
+2.  **Benchmark:** Melakukan pengujian efisiensi pada model-model LLM yang berbeda.
+3.  **UI Integration:** Membantu integrasi tampilan statistik yang lebih interaktif.
 
 ### Cara Berkontribusi:
 1.  **Fork** repository ini.

@@ -27,6 +27,8 @@ export interface SemanticConfig {
   enabled: boolean
   /** Compression mode */
   mode: "nlp" | "mlm" | "llm"
+  /** MLM Model name (Transformers.js) */
+  model?: string
   /** Compress user messages */
   compressUserMessages: boolean
   /** Compress assistant messages */

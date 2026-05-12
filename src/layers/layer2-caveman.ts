@@ -29,6 +29,7 @@ export async function processMessageContext(
 
   // Check minimum length
   if (content.length < deps.config.minLengthChars) {
+    logger.debug(`[L2] Skipping semantic compression: content length (${content.length}) is below threshold (${deps.config.minLengthChars}).`)
     return content
   }
 
@@ -36,7 +37,7 @@ export async function processMessageContext(
     let result: { compressedText: string; originalTokens: number; compressedTokens: number }
 
     if (deps.config.mode === "mlm") {
-      result = await compressMLM(content)
+      result = await compressMLM(content, deps.config.model)
     } else {
       result = compressNLP(content)
     }

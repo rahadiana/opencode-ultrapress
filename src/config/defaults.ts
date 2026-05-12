@@ -16,6 +16,7 @@ export const DEFAULT_CONFIG: UltraPressConfig = {
   semantic: {
     enabled: true,
     mode: "nlp",
+    model: "Xenova/distilbert-base-uncased",
     compressUserMessages: true,
     compressAssistantMessages: false,
     compressToolOutputs: true,

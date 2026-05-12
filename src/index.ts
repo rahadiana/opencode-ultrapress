@@ -58,6 +58,13 @@ export async function server(ctx: any): Promise<Hooks> {
   logger.setLogLevel(config.notification)
 
   logger.info("UltraPress activated! Compressing tokens in the background.")
+  
+  // Pre-load MLM model if enabled to avoid lag on first message
+  if (config.semantic.enabled && config.semantic.mode === "mlm") {
+     import("./caveman/mlm.js").then(m => m.compressMLM("initialization", config.semantic.model)).catch(_e => {
+        logger.debug("[MLM] Pre-load background task started.")
+     })
+  }
 
   return {
     // ─── CUSTOM TOOLS ───────────────────────────────────
