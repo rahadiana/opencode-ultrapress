@@ -18,6 +18,7 @@ export async function compressMLM(text: string): Promise<NLPResult> {
   try {
     // 1. Lazy load the pipeline
     if (!pipeline) {
+      console.info("UltraPress: Loading MLM AI Model (DistilBERT)... This may take a moment on first run.")
       const { pipeline: loadPipeline, env } = await import("@xenova/transformers")
       
       // Disable remote downloads of models if they exist locally
@@ -25,6 +26,7 @@ export async function compressMLM(text: string): Promise<NLPResult> {
       
       // Load a lightweight masked language model
       pipeline = await loadPipeline('fill-mask', 'Xenova/distilbert-base-uncased')
+      console.info("UltraPress: MLM AI Model Loaded Successfully! ✨")
     }
 
     // 2. Perform compression
