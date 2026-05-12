@@ -118,7 +118,7 @@ export async function server(ctx: any): Promise<Hooks> {
        // we need to know the total token count of the entire history.
        if (stats.totalTokensRaw === 0 && sessionID) {
           try {
-             const session = await _ctx.client.session.get({ id: sessionID })
+             const session = await ctx.client.session.get({ id: sessionID })
              if (session && session.messages) {
                 let historyTokens = 0
                 for (const msg of session.messages) {
