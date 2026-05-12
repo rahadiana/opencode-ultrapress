@@ -18,7 +18,7 @@ Mencegat output dari tool CLI (git, bash, npm, docker, dll.) dan menyaring *nois
 ### 2. Layer 2: Semantic Compression (Caveman Mode)
 Mengompresi pesan chat secara semantik sebelum dikirim ke LLM.
 *   **NLP Mode (Default):** Menghapus filler words, grammar, dan artikel yang tidak penting berbasis aturan linguistik cepat.
-*   **MLM Mode (Advanced):** Menggunakan model AI lokal (DistilRoBERTa) untuk menghapus kata-kata dengan tingkat redundansi statistik tinggi (memerlukan instalasi `@xenova/transformers`).
+*   **MLM Mode (Advanced):** Menggunakan model AI lokal (DistilRoBERTa) untuk menghapus kata-kata dengan tingkat redundansi statistik tinggi (Ringan & Berbasis CPU — memerlukan instalasi `@xenova/transformers`).
 *   **Technical Preservation:** Menjamin 100% keamanan untuk kode blok, `camelCase`, jalur file, dan konstanta teknis.
 *   **Contextual Logic:** Hanya mengompresi pesan yang panjang (>200 karakter) agar interaksi singkat tetap natural.
 
