@@ -49,6 +49,8 @@ function pruneBlock(
   block: CompressionBlock,
   cutoffIdx: number = 0,
 ): { removed: number; injected: number } {
+  let injectedCount = 0
+
   // Find message indices for the block's range
   const startIdx = messages.findIndex(m => m.id === block.startId)
   const endIdx = messages.findIndex(m => m.id === block.endId)
@@ -92,7 +94,7 @@ function pruneBlock(
   messages.length = 0
   messages.push(...result)
 
-  return { removed: toRemove.length, injected: 1 }
+  return { removed: toRemove.length, injected: injectedCount }
 }
 
 /**
