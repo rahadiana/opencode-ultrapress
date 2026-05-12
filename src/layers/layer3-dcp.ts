@@ -1,25 +1,31 @@
 /**
- * Layer 3 — Smart Summarization (DCP)
- * Orchestrates nudges and context compaction hooks.
+ * Layer 3 — Dynamic Context Pruning (DCP)
+ *
+ * Two responsibilities:
+ * 1. Context monitoring + nudge injection
+ * 2. experimental.session.compacting — protected context injection
+ *
+ * Note: Message pruning (applyPruning) is called directly from
+ * the chat.message hook in index.ts.
  */
 
 import type { SummarizationConfig, SessionStats } from "../config/schema.js"
 import { checkNudgeRequired, buildNudgePrompt, updateContextTokens } from "../dcp/context-monitor.js"
 import { getProtectedContextString } from "../dcp/summary-store.js"
 import { estimateTokens } from "../utils/token-count.js"
+import * as logger from "../utils/logger.js"
 
 export interface Layer3Deps {
   config: SummarizationConfig
   stats: SessionStats
 }
 
-// Check if we need to nudge the LLM based on turn ticks and context size
+// ─── Existing: Turn-level nudge ──────────────────────────────────────────
+
 export function processTurnForDCP(
   currentMessageContent: string, 
   deps: Layer3Deps
 ): { nudgePrompt: string | null } {
-  
-  // Update token estimate roughly based on incoming message
   updateContextTokens(estimateTokens(currentMessageContent))
 
   if (checkNudgeRequired(deps.config)) {
@@ -29,7 +35,8 @@ export function processTurnForDCP(
   return { nudgePrompt: null }
 }
 
-// Hook logic for experimental.session.compacting
+// ─── Existing: Compacting hook ───────────────────────────────────────────
+
 export function processCompactingHook(sessionId: string, deps: Layer3Deps): string {
   if (!deps.config.enabled) return ""
 

@@ -55,16 +55,18 @@ Atau biarkan saja — UltraPress akan otomatis membuat file config dengan nilai 
 ```mermaid
 flowchart LR
     A([Tool Output]) -->|"tool.execute.after"| L1[Layer 1\nOutput Filter]
-    B([Chat Message]) -->|"chat.message"| L2[Layer 2\nGSC Semantic]
-    B -->|"chat.message"| L3[Layer 3\nDCP Monitor]
+    B([Chat Message]) -->|"chat.message"| PRUNE{Prune\nPending?}
+    PRUNE -->|yes| REMOVE[Remove msgs\n& inject summary]
+    PRUNE -->|no| L2[Layer 2\nGSC Semantic]
+    REMOVE --> L2
+    L2 --> L3[Layer 3\nNudge Monitor]
     L3 -->|"nudge injected"| LLM{LLM}
     LLM -->|"calls tool"| DCP_TOOL[ultrapress_compress]
+    DCP_TOOL -.->|"block stored"| PRUNE
     D([Session Compact]) -->|"session.compacting"| L4[Layer 4\nCleanup]
 
     L1 & L2 & L4 --> CTX[(Context\nWindow)]
 ```
-
-> Diagram teknis lengkap (termasuk error handling strategy per layer) ada di [`docs/architecture.md`](./docs/architecture.md).
 
 ---
 
@@ -81,9 +83,15 @@ Mengompresi teks pesan secara semantik. Layer 2 dan Layer 3 **tidak saling kompr
 - **Code Block Protection**: Tidak pernah menyentuh konten dalam ` ``` blocks`.
 
 ### Layer 3 — Dynamic Context Pruning (DCP)
-Sistem monitoring token aktif yang memberi otonomi kepada LLM untuk mengelola memorinya.
-- **Autonomous Nudge**: Memberi tahu LLM saat context window mendekati 80% batas.
-- **`ultrapress_compress` Tool**: LLM dapat memanggil tool ini untuk meringkas riwayat percakapan.
+Sistem monitoring token aktif yang memberi otonomi kepada LLM untuk mengelola memorinya. Berbeda dari L2 yang hanya mengompresi teks, L3 **benar-benar menghapus pesan lama dari context window** dan menggantinya dengan ringkasan.
+
+- **Block-based Pruning**: Saat `ultrapress_compress` dipanggil, LLM menentukan range pesan yang akan diringkas. Block kompresi disimpan di memory (`compress-state.ts`), lalu dieksekusi pada chat berikutnya.
+- **Pruning via `chat.message` Hook**: Pada setiap pesan baru, sebelum dikirim ke LLM, plugin memeriksa block pending → menghapus pesan dalam range dari array context → menyisipkan ringkasan sebagai synthetic message.
+- **Protected Content**: Tool output penting (`task`, `write`, `edit`, dll.) secara otomatis dilindungi dari pruning agar tidak hilang.
+- **Nesting Support**: Kompresi bisa dilakukan di atas kompresi sebelumnya — ringkasan bertingkat digabung otomatis.
+- **Autonomous Nudge**: Memberi tahu LLM saat context window mendekati batas, menyuruhnya memanggil `ultrapress_compress`.
+- **`ultrapress_compress` Tool**: LLM dapat memanggil tool ini dengan mode `range` (antara dua ID pesan) atau `message` (satu/beberapa ID spesifik).
+- **`preserveLastN`**: Konfigurasi untuk melindungi N pesan terakhir dari pruning — menjaga konteks percakapan terkini tetap utuh. Default: 3.
 
 ### Layer 4 — Session Auto-Cleanup
 - **Error Purging**: Hapus pesan error basi setelah N turn.
@@ -99,7 +107,7 @@ Ketik `/up` di chat OpenCode:
 | :--- | :--- |
 | `/up stats` | Dashboard statistik penghematan token sesi ini |
 | `/up context` | Kapasitas memori, batas limit, sisa token |
-| `/up compress` | Paksa LLM meringkas riwayat percakapan sekarang |
+| `/up compress` | Tampilkan status layer serta aktifkan L3 (jika mati). Untuk kompresi sebenarnya, minta LLM memanggil `ultrapress_compress` |
 | `/up mode <nlp\|mlm>` | Ganti mode kompresi Layer 2 |
 | `/up filter <on\|off>` | Toggle penyaringan output Layer 1 |
 | `/up manual <on\|off>` | Toggle mode manual (auto-summarization mati) |
@@ -125,7 +133,8 @@ File: `~/.config/opencode/ultrapress.json`
 
   "summarization": {
     "maxContextLimit": 70000,
-    "showCompression": true
+    "showCompression": true,
+    "preserveLastN": 3
   }
 }
 ```

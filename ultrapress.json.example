@@ -31,7 +31,8 @@
     "minContextLimit": 40000,    // Ambang batas mulai memberikan peringatan (nudge)
     "nudgeFrequency": 5,         // Munculkan pengingat setiap X pesan
     "summaryBuffer": true,       // Beri ruang napas ekstra setelah kompresi
-    "showCompression": true      // Tampilkan notifikasi saat kompresi berhasil
+    "showCompression": true,     // Tampilkan notifikasi saat kompresi berhasil
+    "preserveLastN": 3           // Jangan prune N pesan terakhir (0 = mati)
   },
 
   // LAYER 4: Auto Cleanup (Purge Engine)

@@ -34,6 +34,7 @@ export const DEFAULT_CONFIG: UltraPressConfig = {
     nudgeFrequency: 5,
     summaryBuffer: true,
     showCompression: true,
+    preserveLastN: 3,
   },
 
   // Layer 4 - Auto Cleanup

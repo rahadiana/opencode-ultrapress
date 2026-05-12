@@ -58,6 +58,8 @@ export interface SummarizationConfig {
   summaryBuffer: boolean
   /** Show compression info in output */
   showCompression: boolean
+  /** Preserve last N messages from pruning to keep recent context intact (0 = disable) */
+  preserveLastN: number
 }
 
 export interface CleanupConfig {

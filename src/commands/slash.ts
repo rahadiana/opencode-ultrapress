@@ -108,13 +108,13 @@ function buildCompressResponse(stats: SessionStats, config: UltraPressConfig): s
    const statusLines = [
       `✅ L1 Output Filter : ${config.outputFilter.enabled ? "active" : "disabled"}`,
       `✅ L2 Semantic (${config.semantic.mode.toUpperCase()}) : ${config.semantic.enabled ? "active" : "disabled"}`,
-      `✅ L3 DCP Summarization : active (nudge injected into next prompt)`,
+      `✅ L3 DCP Summarization : active (nudges every ${config.summarization.nudgeFrequency} turns when context > ${(config.summarization.maxContextLimit / 1000).toFixed(0)}k tokens)`,
       `✅ L4 Auto Cleanup : active`,
    ].join("\n")
 
    const savingsLine = anySaved > 0
       ? `\nSaved so far this session: ${formatTokens(anySaved)} tokens.`
-      : `\nNo tokens compressed yet — plugin just started or no tools have run.`
+      : `\nNo tokens compressed yet — plugin just started or no heavy tools have run.\nRun 'git diff' or 'npm install' then check '/up stats' to see compression in action.`
 
    const noteLines = !wasSummarizationEnabled
       ? `\n⚠️  L3 was disabled. It has been re-enabled for this session.`
@@ -124,8 +124,7 @@ function buildCompressResponse(stats: SessionStats, config: UltraPressConfig): s
 ───────────────────────────────────
 All compression layers are active:\n${statusLines}${savingsLine}${noteLines}
 
-A summarization nudge will be injected into your next message.
-To see the savings report, type: /up stats`
+Type '/up stats' to see real-time token savings breakdown.`
 }
 
 function buildHelpResponse(): string {

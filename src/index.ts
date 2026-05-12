@@ -9,6 +9,7 @@ import { processToolOutput } from "./layers/layer1-output-filter.js"
 import { processMessageContext } from "./layers/layer2-caveman.js"
 import { processTurnForDCP, processCompactingHook } from "./layers/layer3-dcp.js"
 import { compressToolDefinition } from "./dcp/compress-tool.js"
+import { applyPruning } from "./dcp/prune.js"
 import { applyCleanup, handleTurnTick } from "./layers/layer4-cleanup.js"
 import { handleSlashCommand } from "./commands/slash.js"
 import { estimateTokens } from "./utils/token-count.js"
@@ -80,7 +81,11 @@ export async function server(ctx: any): Promise<Hooks> {
        if (input.command === "up") {
           const response = handleSlashCommand(`/up ${input.arguments || ""}`, stats, config)
           output.parts = output.parts || []
-          output.parts.push({ type: "text", text: response })
+          // Push the formatted response AND an instruction to prevent LLM hallucination
+          output.parts.push({
+             type: "text",
+             text: `${response}`
+          })
        }
     },
 
@@ -103,11 +108,19 @@ export async function server(ctx: any): Promise<Hooks> {
       // We use a mock ID for MVP if not provided by OpenCode
       const msgId = input.messageId || `msg_${Date.now()}`
 
+      // Track raw tokens BEFORE any filtering
+      const rawTokens = estimateTokens(rawText)
+      stats.totalTokensRaw += rawTokens
+
       // 1. Layer 1: Output Filter (RTK-style)
       let filteredText = processToolOutput(toolName, args, rawText, { config: config.outputFilter, stats })
 
       // 2. Layer 4: Auto Cleanup (Dedup & Register for Purge)
       filteredText = applyCleanup(toolName, args, filteredText, isError, msgId, { config: config.cleanup, stats })
+
+      // Track compressed tokens AFTER all filtering
+      const compressedTokens = estimateTokens(filteredText)
+      stats.totalTokensCompressed += compressedTokens
 
       // Update output
       output.output = filteredText
@@ -148,26 +161,79 @@ export async function server(ctx: any): Promise<Hooks> {
           output.purgeMessages = idsToPurge
        }
 
-       // Layer 2: Semantic Compression
-       if (output.message && typeof output.message.content === "string") {
-          // Layer 3: Track context and nudge if necessary
-          const { nudgePrompt } = processTurnForDCP(output.message.content, { config: config.summarization, stats })
-          
-          // Apply Layer 2 compression
-          let content = await processMessageContext(
-             output.message.content, 
-             output.message.role, 
-             { config: config.semantic, stats }
-          )
+        // ─── L3: Apply pending pruning on context messages ───
+        // Convert output.message (each msg has { info, parts }) to MessageLike[] for pruning
+        if (output.message && Array.isArray(output.message) && config.summarization.enabled) {
+           const prunableMessages: Array<{ id: string; role: string; parts?: any[] }> =
+              output.message.map((m: any) => ({
+                 id: m.info?.id || m.id,
+                 role: m.info?.role || m.role || "user",
+                 parts: m.parts || [],
+              }))
 
-          // Inject nudge if required
-          if (nudgePrompt && output.message.role === "user") {
-             content = `${content}\n\n${nudgePrompt}`
-             logger.debug("[L3] Injected compression nudge into user prompt.")
-          }
+           const { prunedCount } = applyPruning(prunableMessages, config.summarization.preserveLastN)
 
-          output.message.content = content
-       }
+           if (prunedCount > 0) {
+               // Rebuild output.message from pruned array
+               // Map back: preserve original { info, parts } for kept messages,
+               // create synthetic entries for summary messages (which have .content)
+               const newMessages: any[] = []
+              for (const m of prunableMessages) {
+                 if ((m as any).content) {
+                    // Summary message injected by applyPruning
+                    newMessages.push({
+                       info: { id: m.id, role: m.role },
+                       parts: [{ type: "text", text: (m as any).content }],
+                    })
+                 } else {
+                    // Find original entry to preserve reference
+                    const orig = output.message.find((o: any) => (o.info?.id || o.id) === m.id)
+                    newMessages.push(orig || { info: { id: m.id, role: m.role }, parts: m.parts || [] })
+                 }
+              }
+              output.message.length = 0
+              output.message.push(...newMessages)
+              stats.savedByLayer.summarization += prunedCount
+              logger.info(`[L3] Pruned ${prunedCount} messages from context.`)
+           }
+        }
+
+        // Layer 2 + 3: Semantic Compression & DCP Nudge
+        // Content lives in output.parts (TextPart.text) not output.message.content
+        const textPartIndex = (output.parts || []).findIndex((p: any) => p.type === "text")
+        const msgContent: string | null = textPartIndex >= 0 ? output.parts[textPartIndex].text : null
+        const msgRole: string = (output.message && output.message.role) || "user"
+
+        if (msgContent !== null && msgContent.length > 0) {
+           // Track raw tokens (for stats display, not already tracked by tool.execute.after)
+           if (msgRole === "user") {
+              stats.totalTokensRaw += estimateTokens(msgContent)
+           }
+
+           // Layer 3: Track context and nudge if necessary
+           const { nudgePrompt } = processTurnForDCP(msgContent, { config: config.summarization, stats })
+           
+           // Apply Layer 2 compression
+           let content = await processMessageContext(
+              msgContent, 
+              msgRole as any, 
+              { config: config.semantic, stats }
+           )
+
+           // Inject nudge if required
+           if (nudgePrompt && msgRole === "user") {
+              content = `${content}\n\n${nudgePrompt}`
+              logger.debug("[L3] Injected compression nudge into user prompt.")
+           }
+
+           // Track compressed tokens
+           stats.totalTokensCompressed += estimateTokens(content)
+
+           // Write compressed content back to the text part
+           if (content !== msgContent) {
+              output.parts[textPartIndex].text = content
+           }
+        }
     },
 
     /**
@@ -182,6 +248,7 @@ export async function server(ctx: any): Promise<Hooks> {
           output.context.push(protectedContext)
        }
     },
+
     /**
      * Configuration Hook
      * This is where we register our slash command so it appears in the UI

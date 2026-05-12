@@ -69,6 +69,7 @@ export function processToolOutput(
     const saved = result.originalTokens - result.filteredTokens
     if (saved > 0) {
       deps.stats.savedByLayer.outputFilter += saved
+      deps.stats.compressionCount++
       logger.debug(`[L1] ${toolName} output compressed: ${tokenCount.formatSavings(result.originalTokens, result.filteredTokens)}`)
     }
 
