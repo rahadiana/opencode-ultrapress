@@ -1,6 +1,6 @@
 import { expect, test, describe } from "bun:test"
 import { processTurnForDCP, processCompactingHook } from "../src/layers/layer3-dcp"
-import { checkNudgeRequired, buildNudgePrompt, updateContextTokens, resetContextTokens } from "../src/dcp/context-monitor"
+import { checkNudgeRequired, buildNudgePrompt, updateContextTokens, resetContextTokens, resetTurnCount } from "../src/dcp/context-monitor"
 import { storeSummary, addProtectedContext, getProtectedContextString, clearSummaryStore } from "../src/dcp/summary-store"
 import type { SummarizationConfig, SessionStats } from "../src/config/schema"
 
@@ -31,6 +31,7 @@ function makeStats(): SessionStats {
 
 describe("Layer 3 - DCP Summarization", () => {
   test("context-monitor: check returns false when context below limit", () => {
+    resetTurnCount(0)
     resetContextTokens(0)
     const config = makeConfig({ maxContextLimit: 5000, nudgeFrequency: 1 })
     resetContextTokens(1000)
@@ -38,6 +39,7 @@ describe("Layer 3 - DCP Summarization", () => {
   })
 
   test("context-monitor: check returns true when context exceeds limit", () => {
+    resetTurnCount(0)
     resetContextTokens(0)
     const config = makeConfig({ maxContextLimit: 5000, nudgeFrequency: 1 })
     resetContextTokens(6000)
@@ -45,6 +47,7 @@ describe("Layer 3 - DCP Summarization", () => {
   })
 
   test("context-monitor: respects nudgeFrequency", () => {
+    resetTurnCount(0)
     resetContextTokens(0)
     const config = makeConfig({ maxContextLimit: 1000, nudgeFrequency: 3 })
     resetContextTokens(5000)
@@ -62,6 +65,7 @@ describe("Layer 3 - DCP Summarization", () => {
   })
 
   test("updateContextTokens accumulates correctly", () => {
+    resetTurnCount(0)
     resetContextTokens(0)
     const config = makeConfig({ maxContextLimit: 3000, nudgeFrequency: 1 })
     resetContextTokens(3500)
@@ -69,6 +73,7 @@ describe("Layer 3 - DCP Summarization", () => {
   })
 
   test("processTurnForDCP returns nudgePrompt when conditions met", () => {
+    resetTurnCount(0)
     resetContextTokens(0)
     const stats = makeStats()
     const config = makeConfig({ maxContextLimit: 100, nudgeFrequency: 1 })
@@ -79,6 +84,7 @@ describe("Layer 3 - DCP Summarization", () => {
   })
 
   test("processTurnForDCP returns null nudge when disabled", () => {
+    resetTurnCount(0)
     resetContextTokens(0)
     const stats = makeStats()
     const config = makeConfig({ enabled: false, maxContextLimit: 100, nudgeFrequency: 1 })

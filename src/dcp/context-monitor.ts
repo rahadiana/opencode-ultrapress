@@ -17,6 +17,10 @@ export function resetContextTokens(amount: number = 0) {
   currentContextTokens = amount
 }
 
+export function resetTurnCount(count: number = 0) {
+  turnCount = count
+}
+
 export function checkNudgeRequired(config: SummarizationConfig): boolean {
   if (!config.enabled) return false
   
