@@ -51,37 +51,34 @@ Ketik `/up` di chat OpenCode untuk mengakses dashboard kontrol:
 
 ## ⚙️ Konfigurasi (Fine-Tuning)
 
-Anda dapat mengatur perilaku UltraPress dengan menambahkan opsi di dalam file **`~/.config/opencode/opencode.json`** Anda. Masukkan konfigurasi sebagai argumen kedua dalam array plugin:
+UltraPress mendukung konfigurasi mandiri agar tidak bercampur dengan file `opencode.json` utama. Anda dapat membuat file berikut untuk mengatur perilaku plugin:
 
-```jsonc
+📂 **`~/.config/opencode/ultrapress.json`**
+
+```json
 {
-  "plugin": [
-    [
-      "/path/ke/opencode-ultrapress",
-      {
-        "notification": "minimal", // "off", "minimal", "detailed"
-        
-        // Layer 1 - Output Filtering
-        "outputFilter": {
-          "maxCharsPerOutput": 8000
-        },
-        
-        // Layer 2 - Semantic Compression
-        "semantic": {
-          "mode": "nlp", // "nlp" (fast) or "llm" (smart)
-          "compressUserMessages": true
-        },
-        
-        // Layer 3 - Smart Summarization
-        "summarization": {
-          "maxContextLimit": 100000,
-          "nudgeFrequency": 5
-        }
-      }
-    ]
-  ]
+  "notification": "minimal", // "off", "minimal", "detailed"
+  
+  // Layer 1 - Output Filtering (RTK)
+  "outputFilter": {
+    "maxCharsPerOutput": 8000
+  },
+  
+  // Layer 2 - Semantic Compression (Caveman)
+  "semantic": {
+    "mode": "nlp", // "nlp" atau "mlm"
+    "compressUserMessages": true
+  },
+  
+  // Layer 3 - Smart Summarization (DCP)
+  "summarization": {
+    "maxContextLimit": 70000,
+    "showCompression": true
+  }
 }
 ```
+
+*Jika file ini tidak ditemukan, UltraPress akan secara otomatis menggunakan nilai default yang aman.*
 
 ---
 

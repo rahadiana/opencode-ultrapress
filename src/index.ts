@@ -17,14 +17,30 @@ import * as logger from "./utils/logger.js"
 let config: UltraPressConfig
 let stats: SessionStats
 
-import type { Hooks } from "@opencode-ai/plugin"
+import { Hooks } from "@opencode-ai/plugin"
+import { join } from "path"
+import { readFile } from "fs/promises"
+import { homedir } from "os"
 
 /**
  * OpenCode Plugin Initialization
  */
-export async function server(_ctx: any): Promise<Hooks> {
-  // Load config (mocking for MVP, would normally read from ~/.config/opencode/ultrapress.jsonc)
-  config = mergeConfig({})
+export async function server(ctx: any): Promise<Hooks> {
+  // 1. Start with hardcoded defaults
+  let baseConfig = mergeConfig({})
+  
+  // 2. Try to load from ~/.config/opencode/ultrapress.json
+  const configPath = join(homedir(), ".config", "opencode", "ultrapress.json")
+  try {
+    const fileContent = await readFile(configPath, "utf-8")
+    const externalConfig = JSON.parse(fileContent)
+    baseConfig = mergeConfig(externalConfig)
+    logger.info(`[Config] Loaded dedicated config from ${configPath}`)
+  } catch (e) {
+    logger.debug(`[Config] No dedicated ultrapress.json found at ${configPath}, using defaults.`)
+  }
+
+  config = baseConfig
   stats = createSessionStats()
   logger.setLogLevel(config.notification)
 

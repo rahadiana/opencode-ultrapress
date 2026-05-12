@@ -1,0 +1,18 @@
+{
+  "notification": "minimal",
+  "outputFilter": {
+    "maxCharsPerOutput": 7000
+  },
+  "semantic": {
+    "mode": "nlp",
+    "compressUserMessages": true
+  },
+  "summarization": {
+    "maxContextLimit": 70000,
+    "nudgeFrequency": 5,
+    "showCompression": true
+  },
+  "cleanup": {
+    "purgeErrors": { "enabled": true, "turns": 4 }
+  }
+}
