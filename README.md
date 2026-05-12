@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./docs/image/banner.svg" alt="UltraPress Banner" width="100%" />
+</p>
+
 # 🚀 OpenCode UltraPress
 
 > **Token Compression Plugin for OpenCode AI**
