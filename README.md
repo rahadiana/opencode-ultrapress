@@ -78,23 +78,29 @@ UltraPress mendukung konfigurasi mandiri agar tidak bercampur dengan file `openc
 }
 ```
 
-*Jika file ini tidak ditemukan, UltraPress akan secara otomatis menggunakan nilai default yang aman.*
+*Jika file ini tidak ditemukan, UltraPress akan secara otomatis menggunakan nilai default yang aman. Lihat [ultrapress.json.example](./ultrapress.json.example) untuk referensi konfigurasi lengkap.*
 
 ---
 
-## 🚀 Instalasi & Pengembangan
+## 🤝 Kontribusi & Pengembangan
 
-### Untuk Pengguna
-Tambahkan path lokal ke `~/.config/opencode/opencode.json`:
-```json
-{
-  "plugin": [
-    "/absolute/path/ke/opencode-ultrapress"
-  ]
-}
-```
+UltraPress adalah proyek sumber terbuka yang sangat menghargai kontribusi komunitas. Kami mencari bantuan untuk:
 
-### Untuk Pengembang
+1.  **MLM Implementation:** Membantu mengaktifkan `@xenova/transformers` untuk kompresi semantik berbasis AI lokal yang lebih presisi.
+2.  **New Filters:** Menambahkan filter Layer 1 untuk framework baru (misal: Svelte, Flutter, Elixir).
+3.  **Benchmark:** Melakukan pengujian efisiensi pada model-model LLM yang berbeda.
+
+### Cara Berkontribusi:
+1.  **Fork** repository ini.
+2.  Buat cabang fitur baru (`git checkout -b feature/AmazingFeature`).
+3.  Lakukan **Commit** perubahan Anda (`git commit -m 'Add some AmazingFeature'`).
+4.  **Push** ke cabang tersebut (`git push origin feature/AmazingFeature`).
+5.  Buka **Pull Request**.
+
+---
+
+## 🚀 Pengembangan Lokal
+
 1.  **Clone & Install:**
     ```bash
     git clone https://github.com/rahadiana/opencode-ultrapress.git

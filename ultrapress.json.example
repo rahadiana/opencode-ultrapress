@@ -1,18 +1,46 @@
 {
-  "notification": "minimal",
+  "enabled": true,
+  "notification": "minimal", // Pilihan: "off", "minimal", "detailed"
+  "autoUpdate": true,
+
+  // LAYER 1: Output Filtering (RTK Engine)
   "outputFilter": {
-    "maxCharsPerOutput": 7000
+    "enabled": true,
+    "maxCharsPerOutput": 8000, // Batas karakter log sebelum dipotong (middle-out)
+    "teeSaveOnTruncate": true   // Simpan log asli ke file .log jika terpotong
   },
+
+  // LAYER 2: Semantic Compression (Caveman)
   "semantic": {
-    "mode": "nlp",
-    "compressUserMessages": true
+    "enabled": true,
+    "mode": "nlp",               // Pilihan: "nlp" (Rule-based) atau "mlm" (AI-based)
+    "compressUserMessages": true,
+    "compressAssistantMessages": false,
+    "compressToolOutputs": true,
+    "protectCodeBlocks": true,   // JANGAN pernah kompresi di dalam ``` blocks
+    "protectErrors": true,       // Lindungi stack traces agar tetap akurat
+    "minLengthChars": 200        // Hanya kompresi jika pesan lebih panjang dari ini
   },
+
+  // LAYER 3: Smart Summarization (DCP)
   "summarization": {
-    "maxContextLimit": 70000,
-    "nudgeFrequency": 5,
-    "showCompression": true
+    "enabled": true,
+    "mode": "range",             // Pilihan: "range" (blok pesan) atau "message" (surgical)
+    "maxContextLimit": 70000,    // Ambang batas keras untuk memulai kompresi
+    "minContextLimit": 40000,    // Ambang batas mulai memberikan peringatan (nudge)
+    "nudgeFrequency": 5,         // Munculkan pengingat setiap X pesan
+    "summaryBuffer": true,       // Beri ruang napas ekstra setelah kompresi
+    "showCompression": true      // Tampilkan notifikasi saat kompresi berhasil
   },
+
+  // LAYER 4: Auto Cleanup (Purge Engine)
   "cleanup": {
-    "purgeErrors": { "enabled": true, "turns": 4 }
+    "deduplication": {
+      "enabled": true            // Hapus baris tool-call yang identik secara beruntun
+    },
+    "purgeErrors": {
+      "enabled": true,
+      "turns": 4                 // Hapus pesan error otomatis setelah X giliran chat
+    }
   }
 }
