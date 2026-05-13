@@ -75,7 +75,7 @@ export async function server(ctx: any): Promise<Hooks> {
 
     /**
      * Native Slash Command Interceptor
-     * OpenCode uses this hook to evaluate /up (derived from opencode-up package name)
+     * OpenCode uses this hook to evaluate /up (derived from opencode-ultrapress package name)
      */
     "command.execute.before": async (input: any, output: any) => {
        if (input.command === "up") {
@@ -265,6 +265,6 @@ export async function server(ctx: any): Promise<Hooks> {
 }
 
 export default {
-  id: "@ultrapress/opencode-up",
+  id: "@rahadiana/opencode-ultrapress",
   server
 }

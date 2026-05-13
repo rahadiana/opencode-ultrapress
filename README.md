@@ -642,26 +642,43 @@ bun run lint
 
 ## 📊 Benchmark
 
-Ukur efektivitas kompresi dengan data nyata:
+Jalankan benchmark lengkap untuk mengukur efektivitas **semua 4 layer**:
 
 ```bash
 npm run benchmark
 ```
 
-```
-┌──────────────────────────┬────────────────────────────┬──────────┬────────────┬──────────┐
-│ Fixture                  │ Layer                      │ Original │ Compressed │  Savings │
-├──────────────────────────┼────────────────────────────┼──────────┼────────────┼──────────┤
-│ git-diff-large.txt       │ Layer 1 (Git Filter)       │    1,611 │        981 │      39% │
-│ npm-install-log.txt      │ Layer 1 (Generic Filter)   │      420 │        420 │       0% │
-│ pytest-log.txt           │ Layer 1 (Generic Filter)   │    1,180 │      1,180 │       0% │
-│ chat-history.json        │ Layer 2 (NLP Semantic)     │      625 │        490 │      22% │
-└──────────────────────────┴────────────────────────────┴──────────┴────────────┴──────────┘
+### Hasil Benchmark Terbaru
 
-✅ Total: 3,836 → 3,071 tokens saved (20% overall savings)
+```
+┌────────────────────────────────┬──────────────────────────────────────────┬────────────┬──────────────┬──────────┐
+│ Fixture                        │ Layer                                    │ Original   │ Compressed   │ Savings  │
+├────────────────────────────────┼──────────────────────────────────────────┼────────────┼──────────────┼──────────┤
+│ git-diff-large.txt             │ L1 — Git Filter                          │      1,657 │          969 │      42% │
+│ npm-install-log.txt            │ L1 — Generic Filter                      │        431 │          430 │       0% │
+│ pytest-log.txt                 │ L1 — Generic Filter                      │      1,200 │        1,199 │       0% │
+│ chat-history.json              │ L2 — NLP Semantic                        │        625 │          490 │      22% │
+│ dcp-conversation.json          │ L3 — DCP Pruning (14→summary)            │      2,347 │          645 │      73% │
+│                                │   ↳ 13 msg removed, 1 summary injected   │            │              │          │
+│ 3x identical npm test          │ L4 — Tool Call Dedup                     │      2,244 │          854 │      62% │
+│                                │   ↳ 2 duplicates collapsed               │            │              │          │
+│ 5 errors × 6 turns             │ L4 — Error Auto-Purge                    │        845 │            0 │     100% │
+│                                │   ↳ 5 errors purged after threshold      │            │              │          │
+└────────────────────────────────┴──────────────────────────────────────────┴────────────┴──────────────┴──────────┘
+
+✅ Total: 9,349 → 4,587 tokens (51% overall savings)
 ```
 
-> **Catatan**: Savings tertinggi didapat dari log CLI yang verbose (`git diff`: 39%). Natural language chat menghemat lebih sedikit (22%) karena konten teknis diproteksi. Dataset dan script ada di [`benchmarks/`](./benchmarks/) — kontribusikan fixture dari stack kamu untuk hasil yang lebih representatif.
+### Ringkasan per Layer
+
+| Layer | Fixture | Avg Savings | Karakteristik |
+| :--- | :--- | :--- | :--- |
+| **L1** Output Filter | 3 fixture | **21%** | Paling efektif untuk log CLI verbose (`git diff`: 42%). Output pendek tidak banyak terpengaruh. |
+| **L2** Semantic NLP | 1 fixture | **22%** | Konsisten mengompresi natural language tanpa merusak makna. Code blocks diproteksi penuh. |
+| **L3** DCP Pruning | 1 fixture | **73%** | Penghemat terbesar — menghapus 14 pesan lama & ganti 1 ringkasan. Efek compound di session panjang. |
+| **L4** Auto Cleanup | 2 fixture | **72%** | Dedup menghemat 62% dari tool call berulang. Error purge 100% setelah threshold. |
+
+> 💡 **Insight**: L3 (DCP) adalah layer dengan penghematan tertinggi karena menghapus pesan lama secara bulk. Dalam session panjang (100+ messages), efek komulatif L3 + L4 bisa mencapai **70-90% penghematan token**. Dataset dan script ada di [`benchmarks/`](./benchmarks/) — kontribusikan fixture dari stack kamu untuk hasil yang lebih representatif.
 
 ---
 
