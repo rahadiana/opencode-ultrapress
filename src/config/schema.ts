@@ -7,8 +7,10 @@ export interface OutputFilterConfig {
   maxCharsPerOutput: number
   /** Save full output to temp file when truncated */
   teeSaveOnTruncate: boolean
-  /** Custom regex filter rules */
+  /** User-defined custom filters */
   customFilters: CustomFilter[]
+  /** Tool names to skip filtering (e.g., ["task"] for sub-agent output) */
+  skipTools: string[]
 }
 
 export interface CustomFilter {
@@ -41,6 +43,8 @@ export interface SemanticConfig {
   protectErrors: boolean
   /** Minimum text length to compress (chars) */
   minLengthChars: number
+  /** Tool names to skip compression (e.g., ["task"] for sub-agent output) */
+  skipTools: string[]
 }
 
 export interface SummarizationConfig {

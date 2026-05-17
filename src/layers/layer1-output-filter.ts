@@ -27,6 +27,11 @@ export function processToolOutput(
     return rawOutput
   }
 
+  // Skip protected tools (e.g., sub-agent task output)
+  if (deps.config.skipTools?.includes(toolName)) {
+    return rawOutput
+  }
+
   const { maxCharsPerOutput } = deps.config
   let result: FilterResult
   let command = ""

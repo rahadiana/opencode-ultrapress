@@ -10,6 +10,7 @@ export const DEFAULT_CONFIG: UltraPressConfig = {
     maxCharsPerOutput: 8000,
     teeSaveOnTruncate: true,
     customFilters: [],
+    skipTools: ["task"],
   },
 
   // Layer 2 - Semantic Compression
@@ -23,6 +24,7 @@ export const DEFAULT_CONFIG: UltraPressConfig = {
     protectCodeBlocks: true,
     protectErrors: true,
     minLengthChars: 200,
+    skipTools: ["task"],
   },
 
   // Layer 3 - Smart Summarization

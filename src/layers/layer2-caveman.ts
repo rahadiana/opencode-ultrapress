@@ -18,9 +18,16 @@ export interface Layer2Deps {
 export async function processMessageContext(
   content: string,
   role: "user" | "assistant" | "system" | "tool",
-  deps: Layer2Deps
+  deps: Layer2Deps,
+  tool?: string,
 ): Promise<string> {
   if (!deps.config.enabled) return content
+
+  // Skip protected tools (e.g., sub-agent task output)
+  if (tool && deps.config.skipTools?.includes(tool)) {
+    logger.debug(`[L2] Skipping semantic compression: tool "${tool}" is in skipTools list.`)
+    return content
+  }
 
   // Check role configuration
   if (role === "user" && !deps.config.compressUserMessages) return content

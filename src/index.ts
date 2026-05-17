@@ -239,13 +239,15 @@ export async function server(ctx: any): Promise<Hooks> {
            const textPartIndex = (output.parts || []).findIndex((p: any) => p.type === "text")
            const msgContent: string | null = textPartIndex >= 0 ? output.parts[textPartIndex].text : null
 
-           // Only process if there's text content from the current turn
-           if (msgContent && config.semantic.enabled) {
-               const role = input.role || "assistant"
-               const content = await processMessageContext(msgContent, role, {
-                  stats,
+            // Only process if there's text content from the current turn
+            if (msgContent && config.semantic.enabled) {
+                const role = input.role || "assistant"
+                // Extract tool name from output parts (for skipTools check)
+                const toolName = (output.parts || []).find((p: any) => p.type === "tool")?.tool
+                const content = await processMessageContext(msgContent, role, {
+                   stats,
                   config: config.semantic,
-               })
+                }, toolName)
               stats.savedByLayer.semantic += estimateTokens(msgContent) - estimateTokens(content)
 
               // ─── L3: DCP Nudge ──────────────────────────────────
