@@ -58,6 +58,8 @@ export interface SummarizationConfig {
   minContextLimit: number
   /** How often to check context size (every N turns) */
   nudgeFrequency: number
+  /** Nudge when context reaches this fraction of maxContextLimit (0-1, default: 0.70 = 70%) */
+  nudgeThreshold: number
   /** Buffer summaries for batch processing */
   summaryBuffer: boolean
   /** Show compression info in output */

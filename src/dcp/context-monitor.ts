@@ -58,8 +58,9 @@ export function checkNudgeRequired(config: SummarizationConfig): boolean {
   if (turnCount % config.nudgeFrequency === 0) {
     // Use real input tokens when available, otherwise fall back to estimated
     const effectiveContext = hasRealData ? realInputTokens : currentContextTokens
-    // Pre-emptive nudge at 70% of limit — gives LLM time to compress before context is full
-    const preemptiveLimit = Math.floor(config.maxContextLimit * 0.70)
+    // Pre-emptive nudge at configurable threshold (default 70%) of limit
+    const threshold = config.nudgeThreshold ?? 0.70
+    const preemptiveLimit = Math.floor(config.maxContextLimit * threshold)
     if (effectiveContext > preemptiveLimit) {
       return true
     }

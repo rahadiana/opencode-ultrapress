@@ -11,8 +11,11 @@ function makeConfig(overrides: Partial<SummarizationConfig> = {}): Summarization
     maxContextLimit: 5000,
     minContextLimit: 1000,
     nudgeFrequency: 2,
+    nudgeThreshold: 0.70,
     summaryBuffer: true,
     showCompression: true,
+    preserveLastN: 3,
+    scoreThreshold: 0,
     ...overrides,
   }
 }
@@ -26,6 +29,9 @@ function makeStats(): SessionStats {
     deduplicationCount: 0,
     errorPurgeCount: 0,
     startTime: Date.now(),
+    actualTokensInput: 0,
+    actualTokensOutput: 0,
+    actualTokensReasoning: 0,
   }
 }
 

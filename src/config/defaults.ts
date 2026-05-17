@@ -34,6 +34,7 @@ export const DEFAULT_CONFIG: UltraPressConfig = {
     maxContextLimit: 70_000,
     minContextLimit: 40_000,
     nudgeFrequency: 5,
+    nudgeThreshold: 0.70, // nudge at 70% of maxContextLimit
     summaryBuffer: true,
     showCompression: true,
     preserveLastN: 3,
