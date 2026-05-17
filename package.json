@@ -1,6 +1,6 @@
 {
   "name": "@rahadiana/opencode-ultrapress",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Token compression plugin for OpenCode AI — multi-layer filtering, semantic compression, and dynamic context pruning.",
   "homepage": "https://github.com/rahadiana/opencode-ultrapress#readme",
   "repository": {

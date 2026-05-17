@@ -5,7 +5,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [Unreleased]
+## [0.2.0] — 2026-05-17
 
 ### Added
 - **LLM mode (local)**: summarization pipeline via `@huggingface/transformers` (T5-small, no API key)
@@ -58,5 +58,5 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - History token sync on session resume
 - Session statistics tracking per layer
 
-[Unreleased]: https://github.com/rahadiana/opencode-ultrapress/compare/v0.1.0...HEAD
+[0.2.0]: https://github.com/rahadiana/opencode-ultrapress/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/rahadiana/opencode-ultrapress/releases/tag/v0.1.0
