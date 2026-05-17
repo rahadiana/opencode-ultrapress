@@ -283,10 +283,10 @@ File: `~/.config/opencode/ultrapress.json`
   "notification": "minimal", // "off" | "minimal" | "detailed"
   "autoUpdate": true,        // Auto-update dari npm
 
-  "outputFilter": { /* Layer 1 — Output Filtering */ },
-  "semantic":      { /* Layer 2 — Semantic Compression */ },
-  "summarization": { /* Layer 3 — DCP Pruning */ },
-  "cleanup":       { /* Layer 4 — Auto Cleanup */ }
+      "outputFilter": {},
+      "semantic": {},
+      "summarization": {},
+      "cleanup": {}
 }
 ```
 
