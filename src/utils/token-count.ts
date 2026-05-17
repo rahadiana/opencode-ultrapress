@@ -1,8 +1,50 @@
 /**
- * Approximate token counter using character/word heuristics.
- * Not perfect but good enough for compression ratio tracking.
- * Avoids heavy dependencies like tiktoken.
+ * Token counting utilities for UltraPress.
+ *
+ * Two-tier approach:
+ * 1. countTokens() — accurate model-specific counting via @huggingface/transformers AutoTokenizer
+ * 2. estimateTokens() — fast heuristic fallback (~85% accurate, no model needed)
  */
+
+// ─── Accurate Tokenizer (lazy-loaded) ───────────────────────────────────
+
+let tokenizerPromise: Promise<any> | null = null
+
+async function getTokenizer(): Promise<any> {
+  if (!tokenizerPromise) {
+    tokenizerPromise = (async () => {
+      try {
+        const { AutoTokenizer } = await import("@huggingface/transformers")
+        // Use a small, fast tokenizer — GPT-family compatible
+        return await AutoTokenizer.from_pretrained("Xenova/gpt2")
+      } catch {
+        return null
+      }
+    })()
+  }
+  return tokenizerPromise
+}
+
+/**
+ * Accurate token count using HuggingFace AutoTokenizer.
+ * Falls back to estimateTokens() if tokenizer can't load.
+ * Only use in async contexts.
+ */
+export async function countTokens(text: string): Promise<number> {
+  if (!text) return 0
+  try {
+    const tok = await getTokenizer()
+    if (tok) {
+      const encoded = tok.encode(text)
+      return Array.isArray(encoded) ? encoded.length : 0
+    }
+  } catch {
+    // Fall through to estimate
+  }
+  return estimateTokens(text)
+}
+
+// ─── Fast Heuristic (sync, no deps) ─────────────────────────────────────
 
 /** Average chars per token for English text (GPT-family models) */
 const CHARS_PER_TOKEN = 3.7
@@ -13,6 +55,7 @@ const CHARS_PER_TOKEN_CODE = 3.2
 /**
  * Estimate token count from text using character-based heuristic.
  * ~85-90% accurate vs tiktoken for English/code mix.
+ * Use countTokens() for model-accurate results when async is acceptable.
  */
 export function estimateTokens(text: string): number {
   if (!text) return 0
@@ -24,6 +67,8 @@ export function estimateTokens(text: string): number {
   const charsPerToken = codeRatio > 0.05 ? CHARS_PER_TOKEN_CODE : CHARS_PER_TOKEN
   return Math.ceil(text.length / charsPerToken)
 }
+
+// ─── Formatting ─────────────────────────────────────────────────────────
 
 /**
  * Format token count for display.

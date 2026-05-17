@@ -84,7 +84,7 @@ async function loadModel(modelName: string): Promise<any> {
     console.info(`UltraPress [MLM]: Loading model (${modelName})...`)
     const { pipeline: loadPipeline, env } = await import("@huggingface/transformers")
     Object.assign(env, { allowLocalModels: true, allowRemoteModels: true })
-    pipelineInstance = await loadPipeline("feature-extraction", modelName)
+    pipelineInstance = await loadPipeline("feature-extraction", modelName, { dtype: "q8" })
     currentModelName = modelName
     console.info("UltraPress [MLM]: Model loaded.")
   }
