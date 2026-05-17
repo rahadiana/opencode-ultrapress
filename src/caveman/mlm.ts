@@ -79,7 +79,7 @@ function splitSentences(text: string): string[] {
 // Model Loading
 // ---------------------------------------------------------------------------
 
-async function loadModel(modelName: string): Promise<any> {
+export async function loadModel(modelName: string): Promise<any> {
   if (!pipelineInstance || currentModelName !== modelName) {
     console.info(`UltraPress [MLM]: Loading model (${modelName})...`)
     const { pipeline: loadPipeline, env } = await import("@huggingface/transformers")
