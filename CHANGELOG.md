@@ -5,6 +5,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.2.1] — 2026-05-18
+
+### Fixed
+- **L3 DCP nudge was dead code**: `processTurnForDCP()` was never called from `chat.message` hook — the turn-level nudge prompting LLM to call `ultrapress_compress` never fired. Wired into `chat.message` hook with proper nudge injection.
+- **Double-counting L2 savings**: `stats.savedByLayer.semantic` incremented twice (once in `processMessageContext()`, once in `chat.message` hook). Removed redundant line in `index.ts`.
+- **Session isolation**: `nextBlockId` started at 0, risking ID collisions across plugin restarts. Changed to `Date.now()` and added `resetCompressionState()` call at `server()` startup.
+
+### Added
+- **Config persistence**: `/up mode`, `/up filter`, `/up manual` now persist changes to `ultrapress.json` on disk. Mutations survive plugin restart.
+- **Config mutation tracking**: `handleSlashCommand()` returns `SlashResult { response, configMutated }` for selective disk writes.
+
+---
+
 ## [0.2.0] — 2026-05-17
 
 ### Added
@@ -58,5 +71,6 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - History token sync on session resume
 - Session statistics tracking per layer
 
+[0.2.1]: https://github.com/rahadiana/opencode-ultrapress/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/rahadiana/opencode-ultrapress/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/rahadiana/opencode-ultrapress/releases/tag/v0.1.0
