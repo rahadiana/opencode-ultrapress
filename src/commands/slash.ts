@@ -6,45 +6,52 @@
 import type { SessionStats, UltraPressConfig } from "../config/schema.js"
 import { formatTokens } from "../utils/token-count.js"
 
+export interface SlashResult {
+  response: string
+  configMutated: boolean
+}
+
 export function handleSlashCommand(
   command: string,
   stats: SessionStats,
   config: UltraPressConfig
-): string {
+): SlashResult {
   const parts = command.trim().split(/\s+/)
   const subcmd = parts[1]?.toLowerCase()
   const arg = parts[2]?.toLowerCase()
 
   switch (subcmd) {
     case "stats":
-      return buildStatsResponse(stats, config)
+      return { response: buildStatsResponse(stats, config), configMutated: false }
     case "context":
     case "ctx":
     case "c":
-      return buildContextResponse(stats, config)
+      return { response: buildContextResponse(stats, config), configMutated: false }
     case "compress":
-    case "prune":
-      return buildCompressResponse(stats, config)
+    case "prune": {
+      const wasEnabled = config.summarization.enabled
+      return { response: buildCompressResponse(stats, config), configMutated: !wasEnabled }
+    }
     case "mode":
       if (arg === "nlp" || arg === "mlm" || arg === "llm") {
          config.semantic.mode = arg
-         return `UltraPress: Semantic mode set to ${arg.toUpperCase()}`
+         return { response: `UltraPress: Semantic mode set to ${arg.toUpperCase()}`, configMutated: true }
       }
-      return `UltraPress: Valid modes are nlp, mlm, llm.`
+      return { response: `UltraPress: Valid modes are nlp, mlm, llm.`, configMutated: false }
     case "filter":
       if (arg === "on" || arg === "off") {
          config.outputFilter.enabled = (arg === "on")
-         return `UltraPress: L1 Output Filter is now ${arg.toUpperCase()}`
+         return { response: `UltraPress: L1 Output Filter is now ${arg.toUpperCase()}`, configMutated: true }
       }
-      return `UltraPress: Use '/up filter on|off'`
+      return { response: `UltraPress: Use '/up filter on|off'`, configMutated: false }
     case "manual":
       if (arg === "on" || arg === "off") {
          config.summarization.enabled = (arg === "off") // If manual is ON, auto-summary is OFF
-         return `UltraPress: Auto-summarization is now ${arg === "on" ? "DISABLED (Manual Mode)" : "ENABLED"}`
+         return { response: `UltraPress: Auto-summarization is now ${arg === "on" ? "DISABLED (Manual Mode)" : "ENABLED"}`, configMutated: true }
       }
-      return `UltraPress: Use '/up manual on|off'`
+      return { response: `UltraPress: Use '/up manual on|off'`, configMutated: false }
     default:
-      return buildHelpResponse()
+      return { response: buildHelpResponse(), configMutated: false }
   }
 }
 

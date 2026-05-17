@@ -7,11 +7,11 @@ import { mergeConfig, createSessionStats } from "./config/defaults.js"
 import type { UltraPressConfig, SessionStats } from "./config/schema.js"
 import { processToolOutput } from "./layers/layer1-output-filter.js"
 import { processMessageContext } from "./layers/layer2-caveman.js"
-import { processCompactingHook } from "./layers/layer3-dcp.js"
+import { processTurnForDCP, processCompactingHook } from "./layers/layer3-dcp.js"
 import { compressToolDefinition } from "./dcp/compress-tool.js"
 import { expandToolDefinition } from "./dcp/expand-tool.js"
 import { applyPruning } from "./dcp/prune.js"
-import { storeOriginalContent } from "./dcp/compress-state.js"
+import { storeOriginalContent, resetCompressionState } from "./dcp/compress-state.js"
 import { resetContextTokens, setRealContextTokens } from "./dcp/context-monitor.js"
 import { applyCleanup, handleTurnTick } from "./layers/layer4-cleanup.js"
 import { handleSlashCommand } from "./commands/slash.js"
@@ -61,12 +61,15 @@ export async function server(ctx: any): Promise<Hooks> {
   stats = createSessionStats()
   logger.setLogLevel(config.notification)
 
+  // Reset compression state for clean session start (prevents ID collisions across sessions)
+  resetCompressionState()
+
   logger.info("UltraPress activated! Compressing tokens in the background.")
   
   // Pre-load MLM model if enabled to avoid lag on first message
   if (config.semantic.enabled && config.semantic.mode === "mlm") {
-     import("./caveman/mlm.js").then(m => m.compressMLM("initialization", config.semantic.model)).catch(err => {
-        logger.debug(`[MLM] Pre-load failed: ${err}`)
+     import("./caveman/mlm.js").then(m => m.loadModel(config.semantic.model!)).catch(err => {
+        logger.warn(`[MLM] Pre-load failed: ${err}`)
      })
   }
 
@@ -84,12 +87,21 @@ export async function server(ctx: any): Promise<Hooks> {
     "command.execute.before": async (input: any, output: any) => {
        try {
           if (input.command === "up") {
-             const response = handleSlashCommand(`/up ${input.arguments || ""}`, stats, config)
+             const { response, configMutated } = handleSlashCommand(`/up ${input.arguments || ""}`, stats, config)
              output.parts = output.parts || []
              output.parts.push({
                 type: "text",
                 text: `${response}`
              })
+             // Persist config mutations to disk so they survive restart
+             if (configMutated) {
+                try {
+                   await writeFile(configPath, JSON.stringify(config, null, 2), "utf-8")
+                   logger.info("[Config] Saved updated config to disk.")
+                } catch (writeErr) {
+                   logger.warn(`[Config] Failed to persist config: ${writeErr}`)
+                }
+             }
           }
        } catch (err) {
           logger.error(`[Command] /up failed: ${err}`)
@@ -253,24 +265,33 @@ export async function server(ctx: any): Promise<Hooks> {
                    stats,
                   config: config.semantic,
                 }, toolName)
-              stats.savedByLayer.semantic += estimateTokens(msgContent) - estimateTokens(content)
 
-               // ─── L3: DCP Nudge ──────────────────────────────────
-               let nudgeInjected = false
+               // ─── L3: DCP Turn-level Nudge ──────────────────────
+               // Check if context is approaching limit and inject nudge for LLM to compress
+               let displayText = content
+               if (config.summarization.enabled) {
+                  const { nudgePrompt } = processTurnForDCP(msgContent, {
+                     config: config.summarization,
+                     stats,
+                  })
+                  if (nudgePrompt) {
+                     displayText += "\n\n" + nudgePrompt
+                     logger.info("[L3] Injected DCP compression nudge into prompt.")
+                  }
+               }
+
+               // ─── L3: Context Note (post-compression reminder) ───
                if (config.summarization.enabled && stats.compressionCount > 0) {
-                  // Inject nudge instruction into the user prompt
-                  // This tells the LLM to summarize older context since it's being pruned
-                  output.parts[textPartIndex].text = content + `\n\n[Context note: Older messages have been compressed. Focus on recent ${config.summarization.preserveLastN} messages.]`
-                  nudgeInjected = true
-                  logger.info("[L3] Injected compressed nudge into user prompt.")
+                  displayText += `\n\n[Context note: Older messages have been compressed. Focus on recent ${config.summarization.preserveLastN} messages.]`
+                  logger.info("[L3] Injected compressed context note into user prompt.")
                }
 
                // Track compressed tokens
                stats.totalTokensCompressed += estimateTokens(content)
 
-               // Write compressed content back to the text part (only if nudge wasn't already set)
-               if (content !== msgContent && !nudgeInjected) {
-                  output.parts[textPartIndex].text = content
+               // Write final text back to output
+               if (displayText !== msgContent) {
+                  output.parts[textPartIndex].text = displayText
                }
            }
         } catch (err) {

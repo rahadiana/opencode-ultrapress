@@ -21,7 +21,7 @@ export interface CompressionBlock {
   originalEntries?: Array<{ id: string; role: string; content: string }>
 }
 
-let nextBlockId = 0
+let nextBlockId = Date.now()
 const blocksByMessageId = new Map<string, number[]>() // messageId → blockIds
 const blocksById = new Map<number, CompressionBlock>()
 
