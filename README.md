@@ -71,21 +71,18 @@
 
 ### 1. Install the Plugin
 
-> ⚠️ **Not yet available on npm.** For now, install directly from GitHub.
-
 ```bash
-# From GitHub (recommended — always the latest version)
+# From npm (recommended)
+npm install -g @rahadiana/opencode-ultrapress
+
+# Or from GitHub (latest development)
 npm install -g github:rahadiana/opencode-ultrapress
 
 # Or clone & link manually
 git clone https://github.com/rahadiana/opencode-ultrapress.git
 cd opencode-ultrapress
-npm install
-npm run build
-npm link
+npm install && npm run build && npm link
 ```
-
-> 💡 **Package name**: `@rahadiana/opencode-ultrapress` (will be available on npm after stable release)
 
 ### 2. Register to OpenCode
 
