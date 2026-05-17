@@ -11,7 +11,7 @@
 
 import type { SummarizationConfig, SessionStats } from "../config/schema.js"
 import { checkNudgeRequired, buildNudgePrompt, updateContextTokens } from "../dcp/context-monitor.js"
-import { getProtectedContextString } from "../dcp/summary-store.js"
+import { getProtectedContextString } from "../dcp/compress-state.js"
 import { estimateTokens } from "../utils/token-count.js"
 
 export interface Layer3Deps {

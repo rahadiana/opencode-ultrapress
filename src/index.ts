@@ -10,6 +10,7 @@ import { processMessageContext } from "./layers/layer2-caveman.js"
 import { processTurnForDCP, processCompactingHook } from "./layers/layer3-dcp.js"
 import { compressToolDefinition } from "./dcp/compress-tool.js"
 import { applyPruning } from "./dcp/prune.js"
+import { resetContextTokens } from "./dcp/context-monitor.js"
 import { applyCleanup, handleTurnTick } from "./layers/layer4-cleanup.js"
 import { handleSlashCommand } from "./commands/slash.js"
 import { estimateTokens } from "./utils/token-count.js"
@@ -194,6 +195,7 @@ export async function server(ctx: any): Promise<Hooks> {
               output.message.length = 0
               output.message.push(...newMessages)
               stats.savedByLayer.summarization += prunedCount
+              resetContextTokens(0) // Reset context estimate after pruning
               logger.info(`[L3] Pruned ${prunedCount} messages from context.`)
            }
         }

@@ -95,4 +95,22 @@ export function resetCompressionState(): void {
   nextBlockId = 0
   blocksByMessageId.clear()
   blocksById.clear()
+  protectedContext.clear()
+}
+
+// ─── Protected Context (moved from summary-store.ts) ────────────────────
+
+const protectedContext = new Map<string, Set<string>>()
+
+export function addProtectedContext(sessionId: string, topic: string, content: string) {
+  if (!protectedContext.has(sessionId)) {
+    protectedContext.set(sessionId, new Set())
+  }
+  protectedContext.get(sessionId)!.add(`[${topic}] ${content}`)
+}
+
+export function getProtectedContextString(sessionId: string): string {
+  const ctx = protectedContext.get(sessionId)
+  if (!ctx || ctx.size === 0) return "No critical protected context."
+  return Array.from(ctx).join("\n")
 }

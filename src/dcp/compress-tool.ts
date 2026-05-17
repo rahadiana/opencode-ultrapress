@@ -5,8 +5,7 @@
 
 import { tool } from "@opencode-ai/plugin"
 import type { ToolDefinition } from "@opencode-ai/plugin"
-import { storeSummary } from "./summary-store.js"
-import { createBlock } from "./compress-state.js"
+import { createBlock, getAllBlocks } from "./compress-state.js"
 import { estimateTokens, formatTokens } from "../utils/token-count.js"
 
 const z = tool.schema
@@ -37,12 +36,16 @@ export const compressToolDefinition: ToolDefinition = tool({
       return `Error: Summary too long (${formatTokens(summaryTokens)} tokens). Max ${MAX_SUMMARY_LENGTH} chars.`
     }
 
-    // Also store in summary-store for backward compat
     if (mode === "range") {
       if (!from_id || !to_id) {
         return "Error: from_id and to_id required for range mode."
       }
-      storeSummary(from_id, to_id, summary, topic)
+      
+      // Find overlapping existing blocks for nesting support
+      const existingBlocks = getAllBlocks()
+      const consumedBlockIds = existingBlocks
+        .filter(b => b.startId >= from_id! && b.endId <= to_id!)
+        .map(b => b.blockId)
       
       // Create compression block for actual pruning
       createBlock(
@@ -52,32 +55,33 @@ export const compressToolDefinition: ToolDefinition = tool({
         summary,
         summaryTokens,
         [], // messageIds resolved at transform time
-        [], // consumedBlockIds — future: check overlap with existing blocks
-        [], // preservedToolIds — future: resolve from messages
+        consumedBlockIds,
+        [],
       )
 
       return [
         `Compression stored for range ${from_id} → ${to_id}.`,
         `Summary: ${formatTokens(summaryTokens)} tokens (${summaryChars} chars)`,
         `Topic: ${topic || "general"}`,
+        consumedBlockIds.length > 0 ? `Merged ${consumedBlockIds.length} existing compression block(s).` : null,
         "Messages in this range will be pruned from context on the next request.",
-      ].join("\n")
+      ].filter(Boolean).join("\n")
     } 
     
     if (mode === "message") {
       if (!message_ids || message_ids.length === 0) {
         return "Error: message_ids required for message mode."
       }
-      
-      const spanIds: string[] = []
-      for (const msgId of message_ids) {
-        const span = storeSummary(msgId, msgId, summary, topic)
-        spanIds.push(span.id)
-      }
 
-      // Create compression block
+      // Find overlapping existing blocks for nesting support
       const firstId = message_ids[0]
       const lastId = message_ids[message_ids.length - 1]
+      const existingBlocks = getAllBlocks()
+      const consumedBlockIds = existingBlocks
+        .filter(b => b.startId >= firstId && b.endId <= lastId)
+        .map(b => b.blockId)
+
+      // Create compression block
       createBlock(
         topic || "messages",
         firstId,
@@ -85,7 +89,7 @@ export const compressToolDefinition: ToolDefinition = tool({
         summary,
         summaryTokens,
         message_ids,
-        [],
+        consumedBlockIds,
         [],
       )
 
@@ -93,6 +97,7 @@ export const compressToolDefinition: ToolDefinition = tool({
         `Compression stored. ${message_ids.length} message(s): ${message_ids.join(", ")}`,
         `Summary: ${formatTokens(summaryTokens)} tokens (${summaryChars} chars)`,
         topic ? `Topic: ${topic}` : null,
+        consumedBlockIds.length > 0 ? `Merged ${consumedBlockIds.length} existing compression block(s).` : null,
         "These messages will be pruned from context on the next request.",
       ].filter(Boolean).join("\n")
     }

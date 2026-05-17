@@ -53,7 +53,7 @@
     "typescript": "^5.4.0"
   },
   "dependencies": {
-    "@opencode-ai/plugin": "^1.14.48",
+    "@opencode-ai/plugin": "latest",
     "@xenova/transformers": "^2.0.1",
     "zod": "^4.4.3"
   }
