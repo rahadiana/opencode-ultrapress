@@ -73,8 +73,8 @@ Mengompresi teks pesan secara semantik tanpa mengubah makna. Tidak menyentuh cod
 | Key | Tipe | Default | Deskripsi |
 | :--- | :--- | :--- | :--- |
 | `semantic.enabled` | `boolean` | `true` | Aktifkan Layer 2. |
-| `semantic.mode` | `"nlp"` / `"mlm"` / `"llm"` | `"nlp"` | Mode kompresi. NLP = rule-based (zero latency). MLM = AI-based (perlu download model). LLM = via LLM API *(coming soon)*. |
-| `semantic.model` | `string` | `"Xenova/distilbert-base-uncased"` | Model MLM (hanya untuk mode `mlm`). |
+| `semantic.mode` | `"nlp"` / `"mlm"` / `"llm"` | `"nlp"` | Mode kompresi. NLP = rule-based (zero latency). MLM = AI-based embedding dedup. LLM = local summarization via `@huggingface/transformers`. |
+| `semantic.model` | `string` | `"Xenova/all-MiniLM-L6-v2"` | Model untuk mode `mlm` atau `llm`. MLM default: `all-MiniLM-L6-v2`. LLM default: `t5-small`. |
 | `semantic.compressUserMessages` | `boolean` | `true` | Kompresi pesan dari user. |
 | `semantic.compressAssistantMessages` | `boolean` | `false` | Kompresi pesan dari assistant. Tidak disarankan karena bisa menghilangkan nuance. |
 | `semantic.compressToolOutputs` | `boolean` | `true` | Kompresi output tool setelah diffilter L1. |
@@ -113,13 +113,32 @@ Menggunakan **Masked Language Model** via Transformers.js:
 - Download model ~70MB saat pertama kali
 - Latensi 50-200ms per pesan
 - RAM tambahan ~200MB
-- Deteksi duplikat semantik (cosine similarity antar kalimat)
+- Deteksi duplikat **all-pairs** (bukan hanya adjacent), lebih akurat
+- Quantized: `dtype: "q8"` — model ~71MB (bukan 284MB full)
 - **Wajib**: `npm install -g @huggingface/transformers`
+
+### Mode LLM (Experimental, Local)
+
+```jsonc
+{
+  "semantic": {
+    "mode": "llm"
+  }
+}
+```
+
+Menggunakan **summarization pipeline** via `@huggingface/transformers` (T5-small):
+- Download model ~300MB (q8) saat pertama kali
+- Latensi 1-5s per blok teks
+- Bisa kompresi 5-10x untuk teks panjang
+- **Lokal** — tidak perlu koneksi internet atau API key
+- Fallback ke NLP jika model gagal load
+- Default model: `Xenova/t5-small` (bisa diganti via `semantic.model`)
 
 | Model | Bahasa | Ukuran | Akurasi |
 | :--- | :--- | :--- | :--- |
+| `Xenova/all-MiniLM-L6-v2` | Multilingual | ~71MB (q8) | ~93% |
 | `Xenova/distilbert-base-uncased` | Inggris | ~70MB | ~95% |
-| `Xenova/all-MiniLM-L6-v2` | Multilingual | ~80MB | ~93% |
 | `Xenova/bert-base-multilingual-uncased` | 100+ bahasa (incl. Indonesia) | ~170MB | ~94% |
 
 ### Contoh Kasus
@@ -146,22 +165,37 @@ Layer paling powerful. **Menghapus pesan lama dari context window** dan menggant
 | :--- | :--- | :--- | :--- |
 | `summarization.enabled` | `boolean` | `true` | Aktifkan Layer 3. |
 | `summarization.mode` | `"range"` / `"message"` | `"range"` | Mode pruning: `range` (blok pesan berurutan) atau `message` (satu/beberapa ID spesifik). |
-| `summarization.maxContextLimit` | `number` | `70000` | Ambang batas **keras**. Saat token mencapai ini, pruning HARUS dilakukan. |
-| `summarization.minContextLimit` | `number` | `40000` | Ambang batas **nudge**. Saat token di atas ini, LLM diberi peringatan. |
-| `summarization.nudgeFrequency` | `number` | `5` | Munculkan nudge setiap N turn chat (setelah melewati minContextLimit). |
-| `summarization.summaryBuffer` | `boolean` | `true` | Setelah kompresi, beri jeda sebelum nudge aktif lagi. Mencegah spam nudge. |
-| `summarization.showCompression` | `boolean` | `true` | Tampilkan notifikasi ke user saat kompresi berhasil. |
+| `summarization.maxContextLimit` | `number` | `70000` | Ambang batas **nudge**. Nudge muncul saat 70% limit tercapai (pre-emptive). |
+| `summarization.minContextLimit` | `number` | `40000` | Target token setelah pruning. LLM diarahkan untuk meringkas hingga di bawah ini. |
 | `summarization.preserveLastN` | `number` | `3` | Jangan prune N pesan **terakhir** (0 = disable). Melindungi konteks percakapan terkini. |
+| `summarization.scoreThreshold` | `number` | `0` | Multi-signal importance scoring (0-1). `0` = disable. `0.45` = rekomendasi. Pesan dengan score di atas threshold tetap dipertahankan meskipun masuk block lama. |
 
 ### Alur Kerja
 
 ```
-1. Context Monitor → deteksi token > minContextLimit (40k)
+1. Context Monitor → deteksi token > 70% maxContextLimit (pre-emptive)
 2. Nudge → sisipkan peringatan ke user prompt (setiap nudgeFrequency turn)
 3. LLM panggil → ultrapress_compress(mode="range", from="msg_X", to="msg_Y")
 4. Compression Block → disimpan di memory (belum dieksekusi)
 5. Chat berikutnya → block dieksekusi: hapus msg_X sd msg_Y, sisipkan ringkasan
+6. Original content → disimpan di plugin memory (bukan LLM context)
+7. LLM bisa panggil → ultrapress_expand(block_id=0) untuk lihat konten asli
 ```
+
+### Multi-Signal Importance Scoring
+
+Selain `preserveLastN`, tiap pesan diskor dari 5 sinyal:
+- **Recency** (30%) — pesan baru score lebih tinggi (exponential decay)
+- **Role** (25%) — user > system > assistant > tool
+- **Tool type** (20%) — `write`/`edit`/`bash` > `read`/`grep` > `todowrite`
+- **Keywords** (15%) — task words (`implement`, `fix`, `urgent`) score tinggi
+- **Content size** (10%) — 50-500 chars ideal, very short/long score rendah
+
+Aktifkan dengan `scoreThreshold: 0.45`. Pesan dengan score ≥ threshold tetap dipertahankan meskipun sudah tua.
+
+### Reversible Compression
+
+`ultrapress_expand` tool — LLM bisa "mengembangkan" kembali block yang sudah diringkas untuk lihat konten asli. Konten asli disimpan di plugin memory (Node.js heap), **bukan** di context window LLM — jadi 0 token cost sampai LLM meminta expand.
 
 ### preserveLastN
 
@@ -483,6 +517,7 @@ interface SummarizationConfig {
   summaryBuffer: boolean
   showCompression: boolean
   preserveLastN: number
+  scoreThreshold: number
 }
 
 interface CleanupConfig {
