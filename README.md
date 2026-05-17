@@ -33,14 +33,8 @@
   - [Layer 2 — GSC Semantic Compression](#layer-2--gsc-semantic-compression)
   - [Layer 3 — Dynamic Context Pruning (DCP)](#layer-3--dynamic-context-pruning-dcp)
   - [Layer 4 — Session Auto-Cleanup](#layer-4--session-auto-cleanup)
-- [⚙️ Konfigurasi Lengkap](#️-konfigurasi-lengkap)
-  - [Struktur Config](#struktur-config)
-  - [Layer 1: Output Filter](#layer-1-output-filter)
-  - [Layer 2: Semantic Compression](#layer-2-semantic-compression)
-  - [Layer 3: DCP / Summarization](#layer-3-dcp--summarization)
-  - [Layer 4: Cleanup](#layer-4-cleanup)
-  - [Custom Filters](#custom-filters)
-  - [Preset Konfigurasi](#preset-konfigurasi)
+- [⚙️ Konfigurasi](#️-konfigurasi)
+  - [Dokumentasi lengkap →](./docs/konfigurasi-lengkap.md)
 - [⌨️ Slash Command `/up`](#️-slash-command-up)
   - [Daftar Sub-command](#daftar-sub-command)
   - [Contoh Output](#contoh-output)
@@ -271,138 +265,36 @@ Membersihkan "sampah" dari context window secara otomatis.
 
 ---
 
-## ⚙️ Konfigurasi Lengkap
+## ⚙️ Konfigurasi
 
-### Struktur Config
+> 📖 **Dokumentasi konfigurasi lengkap** (semua key, tipe, default, contoh, preset, custom filter, troubleshooting) ada di:
+> [`docs/konfigurasi-lengkap.md`](./docs/konfigurasi-lengkap.md)
+
+### Struktur Dasar
 
 File: `~/.config/opencode/ultrapress.json`
 
 ```jsonc
 {
-  "enabled": true,           // Master switch seluruh plugin
+  "enabled": true,           // Master switch
   "notification": "minimal", // "off" | "minimal" | "detailed"
-  "autoUpdate": true,        // Auto-update plugin dari npm
+  "autoUpdate": true,        // Auto-update dari npm
 
-  "outputFilter": { /* Layer 1 */ },
-  "semantic":      { /* Layer 2 */ },
-  "summarization": { /* Layer 3 */ },
-  "cleanup":       { /* Layer 4 */ }
+  "outputFilter": { /* Layer 1 — Output Filtering */ },
+  "semantic":      { /* Layer 2 — Semantic Compression */ },
+  "summarization": { /* Layer 3 — DCP Pruning */ },
+  "cleanup":       { /* Layer 4 — Auto Cleanup */ }
 }
 ```
 
-### Layer 1: Output Filter
-
-| Key | Tipe | Default | Deskripsi |
-| :--- | :--- | :--- | :--- |
-| `outputFilter.enabled` | `boolean` | `true` | Aktifkan Layer 1 |
-| `outputFilter.maxCharsPerOutput` | `number` | `8000` | Batas karakter output sebelum dipotong |
-| `outputFilter.teeSaveOnTruncate` | `boolean` | `true` | Simpan log asli ke file jika terpotong |
-| `outputFilter.customFilters` | `CustomFilter[]` | `[]` | Filter kustom (lihat [Custom Filters](#custom-filters)) |
-
-### Layer 2: Semantic Compression
-
-| Key | Tipe | Default | Deskripsi |
-| :--- | :--- | :--- | :--- |
-| `semantic.enabled` | `boolean` | `true` | Aktifkan Layer 2 |
-| `semantic.mode` | `"nlp" \| "mlm" \| "llm"` | `"nlp"` | Mode kompresi |
-| `semantic.model` | `string` | `"Xenova/distilbert-base-uncased"` | Model MLM (hanya mode `mlm`) |
-| `semantic.compressUserMessages` | `boolean` | `true` | Kompresi pesan user |
-| `semantic.compressAssistantMessages` | `boolean` | `false` | Kompresi pesan assistant (biasanya tidak disarankan) |
-| `semantic.compressToolOutputs` | `boolean` | `true` | Kompresi output tool |
-| `semantic.protectCodeBlocks` | `boolean` | `true` | **JANGAN** sentuh code blocks |
-| `semantic.protectErrors` | `boolean` | `true` | Lindungi error messages |
-| `semantic.minLengthChars` | `number` | `200` | Skip kompresi jika teks < N karakter |
-
-### Layer 3: DCP / Summarization
-
-| Key | Tipe | Default | Deskripsi |
-| :--- | :--- | :--- | :--- |
-| `summarization.enabled` | `boolean` | `true` | Aktifkan Layer 3 |
-| `summarization.mode` | `"range" \| "message"` | `"range"` | Mode pruning default |
-| `summarization.maxContextLimit` | `number` | `70000` | Ambang batas keras — mulai kompresi |
-| `summarization.minContextLimit` | `number` | `40000` | Ambang batas nudge — mulai peringatan |
-| `summarization.nudgeFrequency` | `number` | `5` | Munculkan nudge setiap N pesan |
-| `summarization.summaryBuffer` | `boolean` | `true` | Jeda setelah kompresi sebelum nudge lagi |
-| `summarization.showCompression` | `boolean` | `true` | Tampilkan notifikasi saat kompresi |
-| `summarization.preserveLastN` | `number` | `3` | Jangan prune N pesan terakhir (`0` = disable) |
-
-### Layer 4: Cleanup
-
-| Key | Tipe | Default | Deskripsi |
-| :--- | :--- | :--- | :--- |
-| `cleanup.deduplication.enabled` | `boolean` | `true` | Aktifkan dedup tool call |
-| `cleanup.purgeErrors.enabled` | `boolean` | `true` | Aktifkan auto-purge error |
-| `cleanup.purgeErrors.turns` | `number` | `4` | Hapus error setelah N turn |
-
-### Custom Filters
-
-Tambahkan filter kustom untuk tool CLI spesifik di `outputFilter.customFilters`:
-
-```jsonc
-{
-  "outputFilter": {
-    "customFilters": [
-      {
-        "commandPattern": "kubectl|helm",
-        "stripPatterns": ["^\\s*$", "^(NAME|AGE|STATUS)\\s"],
-        "keepPatterns": ["Error", "Failed", "CrashLoopBackOff"],
-        "maxLines": 200
-      }
-    ]
-  }
-}
-```
-
-| Field | Tipe | Deskripsi |
+| Layer | Key | Fungsi |
 | :--- | :--- | :--- |
-| `commandPattern` | `string` (regex) | Pola nama command yang difilter |
-| `stripPatterns` | `string[]` (regex) | Baris yang matching pattern ini → dihapus |
-| `keepPatterns` | `string[]` (regex) | Baris yang matching pattern ini → selalu dipertahankan |
-| `maxLines` | `number` | Batas maksimum baris output |
+| **L1** | `outputFilter` | Batasi panjang output CLI, filter baris repetitive |
+| **L2** | `semantic` | Kompresi teks NLP/MLM tanpa merusak makna |
+| **L3** | `summarization` | Hapus pesan lama, ganti ringkasan, proteksi `preserveLastN` |
+| **L4** | `cleanup` | Dedup tool call, auto-purge error basi |
 
-### Preset Konfigurasi
-
-<details>
-<summary><b>🔋 Hemat Maksimal</b> (untuk session panjang / banyak tool output)</summary>
-
-```json
-{
-  "outputFilter": { "maxCharsPerOutput": 4000 },
-  "summarization": {
-    "maxContextLimit": 50000,
-    "minContextLimit": 25000,
-    "nudgeFrequency": 3,
-    "preserveLastN": 2
-  }
-}
-```
-</details>
-
-<details>
-<summary><b>🧠 Preservasi Maksimal</b> (untuk session coding intensif)</summary>
-
-```json
-{
-  "semantic": { "protectCodeBlocks": true, "minLengthChars": 500 },
-  "summarization": {
-    "maxContextLimit": 100000,
-    "minContextLimit": 60000,
-    "preserveLastN": 5
-  }
-}
-```
-</details>
-
-<details>
-<summary><b>🔇 Silent Mode</b> (tidak ada notifikasi sama sekali)</summary>
-
-```json
-{
-  "notification": "off",
-  "summarization": { "showCompression": false }
-}
-```
-</details>
+> 👉 **[Buka dokumentasi lengkap →](./docs/konfigurasi-lengkap.md)** mencakup semua key, tipe, default, custom filter, preset (Hemat Maksimal / Preservasi / Silent / MLM), dan troubleshooting.
 
 ---
 
@@ -797,6 +689,7 @@ npm run lint    # tsc --noEmit untuk cek type error
 | Custom filter API | ✅ Done | v0.1.0 |
 | TF-IDF scoring (MLM improvement) | 🚧 Planned | v0.2.0 |
 | Sentence similarity (MLM improvement) | 🚧 Planned | v0.2.0 |
+| Sub-agent (`task`) token tracking & compression | 💡 Idea | TBD |
 | UI stats dashboard di OpenCode | 💡 Idea | TBD |
 | Support lebih banyak bahasa (NLP) | 💡 Idea | TBD |
 
