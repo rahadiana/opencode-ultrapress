@@ -142,12 +142,24 @@ export async function compressMLM(
       return { ...compressNLP(text), method: "embed-failed" }
     }
 
-    // ── 5. Semantic dedup (adjacent, cosine similarity) ─────────────────
-    const keptIndices: number[] = [0]
+    // ── 5. Semantic dedup (all-pairs cosine similarity) ─────────────────
+    // For each sentence, check against ALL previously-kept sentences.
+    // This catches duplicates that aren't adjacent (e.g., repeated phrases,
+    // restated conclusions, boilerplate that appears in different sections).
+    const keptIndices: number[] = [0] // Always keep first sentence
 
     for (let i = 1; i < sentences.length; i++) {
-      const sim = cosineSimilarity(embeddings[i - 1]!, embeddings[i]!)
-      if (sim < SIMILARITY_THRESHOLD) {
+      const embI = embeddings[i]!
+      let isDupe = false
+      // Compare against all already-kept sentences
+      for (const j of keptIndices) {
+        const sim = cosineSimilarity(embeddings[j]!, embI)
+        if (sim >= SIMILARITY_THRESHOLD) {
+          isDupe = true
+          break
+        }
+      }
+      if (!isDupe) {
         keptIndices.push(i)
       }
     }

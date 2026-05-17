@@ -60,6 +60,8 @@ export interface SummarizationConfig {
   showCompression: boolean
   /** Preserve last N messages from pruning to keep recent context intact (0 = disable) */
   preserveLastN: number
+  /** Multi-signal importance scoring threshold (0-1). 0 = disabled, 0.45 = recommended. */
+  scoreThreshold: number
 }
 
 export interface CleanupConfig {

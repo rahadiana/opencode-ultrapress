@@ -35,6 +35,7 @@ export const DEFAULT_CONFIG: UltraPressConfig = {
     summaryBuffer: true,
     showCompression: true,
     preserveLastN: 3,
+    scoreThreshold: 0, // 0 = disabled, use 0.45 to enable multi-signal scoring
   },
 
   // Layer 4 - Auto Cleanup

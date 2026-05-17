@@ -1,11 +1,17 @@
 /**
  * Message Pruning — removes compressed messages from the message array
  * and replaces them with a synthetic summary message.
+ *
+ * Supports two strategies:
+ * 1. preserveLastN — simple recency cutoff (binary)
+ * 2. Multi-signal scoring — per-message importance for partial-block pruning
  */
 
 import type { CompressionBlock } from "./compress-state.js"
 import * as CompressState from "./compress-state.js"
 import { isProtectedTool } from "./protected-content.js"
+import { scoreMessage, type MessageMeta } from "./scorer.js"
+import * as logger from "../utils/logger.js"
 
 export interface MessageLike {
   id: string
@@ -14,16 +20,35 @@ export interface MessageLike {
   content?: string
 }
 
+// ─── MessageLike → MessageMeta conversion ───────────────────────────────
+
+function toMeta(msg: MessageLike, index: number, total: number): MessageMeta {
+  let tool: string | undefined
+  let content = msg.content || ""
+  if (msg.parts) {
+    for (const part of msg.parts) {
+      if (part.type === "tool" && part.tool) tool = part.tool
+      if (part.type === "text" && !content) content = part.text || content
+    }
+  }
+  return { id: msg.id, role: msg.role, tool, content, index, totalMessages: total }
+}
+
+// ─── Main Pruning Entry ─────────────────────────────────────────────────
+
 /**
  * Prune compressed messages from the messages array.
- * Replaces compressed ranges with synthetic summary messages.
- * 
+ *
  * @param preserveLastN - Keep last N messages safe from pruning (0 = disable)
+ * @param scoreThreshold - If > 0, use multi-signal scoring. Messages scoring
+ *   above this threshold are preserved even if inside a compression block.
+ *   Default 0 = no scoring (binary preserveLastN only).
  * @returns number of tokens removed (estimated from summary token count)
  */
 export function applyPruning(
   messages: MessageLike[],
   preserveLastN: number = 0,
+  scoreThreshold: number = 0,
 ): { prunedCount: number; injectedCount: number } {
   const blocks = CompressState.getAllBlocks()
   if (blocks.length === 0) return { prunedCount: 0, injectedCount: 0 }
@@ -31,14 +56,30 @@ export function applyPruning(
   // Calculate cutoff index: messages at or after this index are preserved
   const cutoffIdx = preserveLastN > 0 ? Math.max(0, messages.length - preserveLastN) : 0
 
+  // Build score-based keep set if scoring is enabled
+  let scoreKeepIds: Set<string> | undefined
+  if (scoreThreshold > 0) {
+    scoreKeepIds = new Set()
+    const metas = messages.map((m, i) => toMeta(m, i, messages.length))
+    for (const meta of metas) {
+      const s = scoreMessage(meta)
+      if (s >= scoreThreshold) {
+        scoreKeepIds.add(meta.id)
+      }
+    }
+    const scoredCount = scoreKeepIds.size
+    if (scoredCount > 0) {
+      logger.debug(`[Prune] Scoring keeps ${scoredCount}/${messages.length} messages (threshold ${scoreThreshold})`)
+    }
+  }
+
   let prunedCount = 0
   let injectedCount = 0
 
-  // Process blocks from oldest to newest
   for (const block of blocks) {
-    const { removed, injected } = pruneBlock(messages, block, cutoffIdx)
-    prunedCount += removed
-    injectedCount += injected
+    const result = pruneBlock(messages, block, cutoffIdx, scoreKeepIds)
+    prunedCount += result.removed
+    injectedCount += result.injected
   }
 
   return { prunedCount, injectedCount }
@@ -48,34 +89,43 @@ function pruneBlock(
   messages: MessageLike[],
   block: CompressionBlock,
   cutoffIdx: number = 0,
+  scoreKeepIds?: Set<string>,
 ): { removed: number; injected: number } {
   let injectedCount = 0
 
-  // Find message indices for the block's range
   const startIdx = messages.findIndex(m => m.id === block.startId)
   const endIdx = messages.findIndex(m => m.id === block.endId)
 
   if (startIdx === -1 || endIdx === -1 || startIdx > endIdx) {
-    return { removed: 0, injected: 0 } // range not found in current messages
-  }
-
-  // If the block's range overlaps with the preserved zone, skip entirely
-  // This protects recent messages from being removed
-  if (cutoffIdx > 0 && endIdx > cutoffIdx) {
     return { removed: 0, injected: 0 }
   }
 
-  // Count messages in range (exclusive of boundaries — keep start/end for context)
+  // If scoring is active, build a keep set from block's messages
+  const blockKeepIds = new Set(scoreKeepIds || [])
+
+  // If the block overlaps preserved zone but scoring is active,
+  // we may still partially prune low-scoring messages before the cutoff
+  if (cutoffIdx > 0 && endIdx >= cutoffIdx) {
+    if (!scoreKeepIds || scoreKeepIds.size === 0) {
+      // No scoring — skip entire block (legacy behavior)
+      return { removed: 0, injected: 0 }
+    }
+    // With scoring: we can still prune messages within this block
+    // as long as they're below the score threshold
+  }
+
   const rangeMessages = messages.slice(startIdx + 1, endIdx)
-  const toRemove = rangeMessages.filter(m => !isProtectedMessage(m))
+  const toRemove = rangeMessages.filter(m => {
+    if (isProtectedMessage(m)) return false
+    if (blockKeepIds.has(m.id)) return false // scorer says keep
+    return true
+  })
 
   if (toRemove.length === 0) return { removed: 0, injected: 0 }
 
-  // Mark for removal by id
   const removeIds = new Set(toRemove.map(m => m.id))
   const result = messages.filter(m => !removeIds.has(m.id))
 
-  // Inject summary message after startIdx
   const effectiveSummary = CompressState.getEffectiveSummary(block.blockId)
   const summaryMsg: MessageLike = {
     id: `__dcp_summary_${block.blockId}__`,
@@ -83,14 +133,12 @@ function pruneBlock(
     content: `[Compressed summary: ${block.topic}] ${effectiveSummary}`,
   }
 
-  // Find where to insert (after the start message, in the filtered array)
   const insertAfter = result.findIndex(m => m.id === block.startId)
   if (insertAfter >= 0) {
     result.splice(insertAfter + 1, 0, summaryMsg)
     injectedCount = 1
   }
 
-  // Update the original array
   messages.length = 0
   messages.push(...result)
 
@@ -99,7 +147,6 @@ function pruneBlock(
 
 /**
  * Check if a message should be protected from pruning.
- * Protected messages include those with protected tool outputs.
  */
 function isProtectedMessage(msg: MessageLike): boolean {
   if (!msg.parts) return false

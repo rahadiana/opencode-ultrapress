@@ -199,7 +199,7 @@ export async function server(ctx: any): Promise<Hooks> {
                     parts: m.parts || [],
                  }))
 
-              const { prunedCount } = applyPruning(prunableMessages, config.summarization.preserveLastN)
+              const { prunedCount } = applyPruning(prunableMessages, config.summarization.preserveLastN, config.summarization.scoreThreshold)
 
               if (prunedCount > 0) {
                   // Rebuild output.message from pruned array

@@ -6,6 +6,7 @@
 import type { SemanticConfig, SessionStats } from "../config/schema.js"
 import { compressNLP } from "../caveman/nlp.js"
 import { compressMLM } from "../caveman/mlm.js"
+import { compressLLM } from "../caveman/llm.js"
 import * as logger from "../utils/logger.js"
 import { formatSavings } from "../utils/token-count.js"
 
@@ -38,6 +39,8 @@ export async function processMessageContext(
 
     if (deps.config.mode === "mlm") {
       result = await compressMLM(content, deps.config.model)
+    } else if (deps.config.mode === "llm") {
+      result = await compressLLM(content)
     } else {
       result = compressNLP(content)
     }
