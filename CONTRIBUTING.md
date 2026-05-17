@@ -1,20 +1,20 @@
 # Contributing to UltraPress
 
-Selamat datang! Kontribusi sangat diterima. Berikut panduan untuk memulai.
+Welcome! Contributions are highly appreciated. Here's how to get started.
 
-## Area Kontribusi
+## Contribution Areas
 
-| Area | Tingkat Kesulitan | Deskripsi |
+| Area | Difficulty | Description |
 |---|---|---|
-| **New Filters** | ⭐ Mudah | Tambah filter Layer 1 untuk tool/framework baru (Docker, Terraform, K8s, Svelte, Flutter) |
-| **Multi-Language NLP** | ⭐⭐ Menengah | Perluas aturan grammar stripping untuk bahasa baru (Japanese, Arabic, etc.) |
-| **Benchmark Dataset** | ⭐ Mudah | Kontribusikan fixture log dari stack kamu ke `benchmarks/fixtures/` |
-| **Bug Reports** | ⭐ Mudah | Laporkan edge case: output tidak terfilter, pesan penting terhapus |
-| **LLM Mode Models** | ⭐⭐ Menengah | Test model summarization lain via `semantic.model` config |
-| **DCP Scoring Tuning** | ⭐⭐ Menengah | Tuning bobot 5-signal scoring di `scorer.ts` |
-| **CI/CD Improvements** | ⭐ Mudah | Tambah matrix testing, publish automation |
+| **New Filters** | ⭐ Easy | Add Layer 1 filters for new tools/frameworks (Docker, Terraform, K8s, Svelte, Flutter) |
+| **Multi-Language NLP** | ⭐⭐ Medium | Expand grammar stripping rules for new languages (Japanese, Arabic, etc.) |
+| **Benchmark Dataset** | ⭐ Easy | Contribute log fixtures from your stack to `benchmarks/fixtures/` |
+| **Bug Reports** | ⭐ Easy | Report edge cases: unfiltered output, important messages removed |
+| **LLM Mode Models** | ⭐⭐ Medium | Test alternative summarization models via `semantic.model` config |
+| **DCP Scoring Tuning** | ⭐⭐ Medium | Tune the 5-signal scoring weights in `scorer.ts` |
+| **CI/CD Improvements** | ⭐ Easy | Add matrix testing, publish automation |
 
-## Setup Development
+## Development Setup
 
 ```bash
 git clone https://github.com/rahadiana/opencode-ultrapress.git
@@ -24,9 +24,9 @@ npm run build
 npm test
 ```
 
-**Prasyarat:** Node.js >= 18, Bun (untuk testing).
+**Prerequisites:** Node.js >= 18, Bun (for testing).
 
-## Struktur Proyek
+## Project Structure
 
 ```
 src/
@@ -50,55 +50,55 @@ src/
 ├── utils/                # Token count, logger
 tests/                    # Unit tests (Bun)
 benchmarks/               # Benchmark script + fixtures
-docs/                     # Konfigurasi + arsitektur
+docs/                     # Configuration + architecture
 ```
 
-## Alur Kontribusi
+## Contribution Workflow
 
-1. **Fork** repo
-2. **Buat branch**: `feat/nama-fitur` atau `fix/nama-bug`
-3. **Implementasi** + tests
-4. **Jalankan**: `npm run lint && npm test && npm run build`
-5. **Commit** dengan pesan [conventional commits](https://www.conventionalcommits.org/)
-6. **Buat Pull Request** — isi template PR dengan jelas
+1. **Fork** the repo
+2. **Create branch**: `feat/feature-name` or `fix/bug-name`
+3. **Implement** + tests
+4. **Run**: `npm run lint && npm test && npm run build`
+5. **Commit** using [conventional commits](https://www.conventionalcommits.org/)
+6. **Create Pull Request** — fill out the PR template clearly
 
-## Konvensi Commit
+## Commit Conventions
 
 ```
-feat: deskripsi fitur baru
-fix: deskripsi perbaikan bug
-docs: perubahan dokumentasi
-refactor: perubahan kode tanpa ubah behavior
-test: penambahan/perbaikan test
-ci: perubahan CI/CD
+feat: description of a new feature
+fix: description of a bug fix
+docs: documentation changes
+refactor: code changes without behavior change
+test: test additions/fixes
+ci: CI/CD changes
 ```
 
-## Membuat Filter Baru (Layer 1)
+## Creating a New Filter (Layer 1)
 
-1. Buat file di `src/filters/[tool].ts`
+1. Create file at `src/filters/[tool].ts`
 2. Export function `filterXxx(command, output, maxChars): FilterResult`
-3. Tambah detection di `layer1-output-filter.ts`
-4. Tambah test di `tests/layer1.test.ts`
-5. Tambah fixture di `benchmarks/fixtures/`
+3. Add detection in `layer1-output-filter.ts`
+4. Add test in `tests/layer1.test.ts`
+5. Add fixture in `benchmarks/fixtures/`
 
-Lihat `src/filters/git.ts` sebagai contoh template.
+See `src/filters/git.ts` as a template example.
 
-## Menambah Aturan NLP (Layer 2)
+## Adding NLP Rules (Layer 2)
 
-1. Tambah strippable words di `src/caveman/rules.ts`
-2. Tambah preserved fact regex di `src/caveman/facts.ts`
-3. Tambah test case di test file yang relevan
+1. Add strippable words in `src/caveman/rules.ts`
+2. Add preserved fact regex in `src/caveman/facts.ts`
+3. Add test case in the relevant test file
 
 ## Testing
 
 ```bash
-bun test                    # semua test
-bun test tests/layer1.test.ts   # test spesifik
-npm run benchmark           # benchmark
+bun test                         # all tests
+bun test tests/layer1.test.ts    # specific test
+npm run benchmark                # benchmark
 ```
 
 ## Need Help?
 
-- Buka [Issue](https://github.com/rahadiana/opencode-ultrapress/issues) dengan label `question`
-- Lihat `docs/konfigurasi-lengkap.md` untuk semua config key
-- Lihat `docs/architecture.md` untuk diagram arsitektur
+- Open an [Issue](https://github.com/rahadiana/opencode-ultrapress/issues) with the `question` label
+- See `docs/konfigurasi-lengkap.md` for all config keys
+- See `docs/architecture.md` for the architecture diagram
