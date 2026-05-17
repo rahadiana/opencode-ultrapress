@@ -44,7 +44,7 @@
     "pruning",
     "llm"
   ],
-  "author": "rahadiana",
+  "author": "rahadiana nugraha <rahadiana.nugraha@gmail.com>",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^25.7.0",
