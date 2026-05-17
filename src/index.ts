@@ -303,7 +303,4 @@ export async function server(ctx: any): Promise<Hooks> {
   }
 }
 
-export default {
-  id: "@rahadiana/opencode-ultrapress",
-  server
-}
+export default server
