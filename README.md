@@ -9,7 +9,7 @@
 **Token Compression Plugin for OpenCode AI**
 
 [![CI](https://github.com/rahadiana/opencode-ultrapress/actions/workflows/ci.yml/badge.svg)](https://github.com/rahadiana/opencode-ultrapress/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/badge/npm-soon!-lightgrey)](https://www.npmjs.com/package/@rahadiana/opencode-ultrapress)
+[![npm](https://img.shields.io/npm/v/@rahadiana/opencode-ultrapress?color=red)](https://www.npmjs.com/package/@rahadiana/opencode-ultrapress)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 </div>
