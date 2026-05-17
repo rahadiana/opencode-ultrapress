@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/rahadiana/opencode-ultrapress/main/ultrapress.schema.json",
+  "title": "UltraPress Configuration",
+  "description": "Configuration schema for UltraPress — token compression plugin for OpenCode AI.",
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "type": "boolean",
+      "description": "Master switch for the entire plugin.",
+      "default": true
+    },
+    "notification": {
+      "type": "string",
+      "enum": ["off", "minimal", "detailed"],
+      "description": "Log verbosity level.",
+      "default": "minimal"
+    },
+    "autoUpdate": {
+      "type": "boolean",
+      "description": "Auto-update from npm on OpenCode restart.",
+      "default": true
+    },
+    "outputFilter": {
+      "type": "object",
+      "description": "Layer 1 — Tool output filtering.",
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "maxCharsPerOutput": { "type": "number", "default": 8000 },
+        "teeSaveOnTruncate": { "type": "boolean", "default": true },
+        "customFilters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "command": { "type": "string" },
+              "maxLines": { "type": "number" },
+              "pattern": { "type": "string" }
+            },
+            "required": ["command"]
+          }
+        }
+      }
+    },
+    "semantic": {
+      "type": "object",
+      "description": "Layer 2 — Semantic compression.",
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "mode": { "type": "string", "enum": ["nlp", "mlm", "llm"], "default": "nlp" },
+        "model": { "type": "string", "default": "Xenova/all-MiniLM-L6-v2" },
+        "compressUserMessages": { "type": "boolean", "default": true },
+        "compressAssistantMessages": { "type": "boolean", "default": false },
+        "compressToolOutputs": { "type": "boolean", "default": true },
+        "protectCodeBlocks": { "type": "boolean", "default": true },
+        "protectErrors": { "type": "boolean", "default": true },
+        "minLengthChars": { "type": "number", "default": 200 }
+      }
+    },
+    "summarization": {
+      "type": "object",
+      "description": "Layer 3 — Dynamic Context Pruning.",
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "mode": { "type": "string", "enum": ["range", "message"], "default": "range" },
+        "maxContextLimit": { "type": "number", "default": 70000 },
+        "minContextLimit": { "type": "number", "default": 40000 },
+        "nudgeFrequency": { "type": "number", "default": 5 },
+        "summaryBuffer": { "type": "boolean", "default": true },
+        "showCompression": { "type": "boolean", "default": true },
+        "preserveLastN": { "type": "number", "default": 3 },
+        "scoreThreshold": { "type": "number", "default": 0, "description": "0-1. 0=off, 0.45=recommended" }
+      }
+    },
+    "cleanup": {
+      "type": "object",
+      "description": "Layer 4 — Deduplication & error purging.",
+      "properties": {
+        "deduplication": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean", "default": true }
+          }
+        },
+        "purgeErrors": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean", "default": true },
+            "turns": { "type": "number", "default": 4 }
+          }
+        }
+      }
+    }
+  }
+}

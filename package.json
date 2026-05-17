@@ -44,7 +44,7 @@
     "pruning",
     "llm"
   ],
-  "author": "",
+  "author": "rahadiana",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^25.7.0",
@@ -54,7 +54,7 @@
   },
   "dependencies": {
     "@huggingface/transformers": "^4.2.0",
-    "@opencode-ai/plugin": "latest",
+    "@opencode-ai/plugin": "^1.14.0",
     "zod": "^4.4.3"
   }
 }
