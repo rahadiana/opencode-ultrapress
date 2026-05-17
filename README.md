@@ -105,7 +105,7 @@ UltraPress bekerja out-of-the-box dengan default terbaik. Untuk kustomisasi:
 
 ```bash
 # Install dari GitHub → copy dari repo yang sudah di-clone
-cp ultrapress.json.example ~/.config/opencode/ultrapress.json
+cp ultrapress.jsonc.example ~/.config/opencode/ultrapress.json
 
 # Atau dari global install
 cp $(npm root -g)/@rahadiana/opencode-ultrapress/ultrapress.json.example ~/.config/opencode/ultrapress.json
@@ -453,7 +453,7 @@ opencode-ultrapress/
 ├── docs/
 │   └── image/
 │       └── banner.svg              # README banner
-├── ultrapress.json.example         # Template konfigurasi
+├── ultrapress.jsonc.example        # Template konfigurasi (JSONC)
 ├── tsconfig.json                   # TypeScript config
 ├── tsup.config.ts                  # Build config (tsup)
 ├── package.json
