@@ -2,6 +2,8 @@ name: Publish to npm
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'          # Trigger on version tags (v0.2.0, v1.0.0, etc.)
   workflow_dispatch:   # Manual trigger from Actions tab
@@ -44,6 +46,12 @@ jobs:
       - run: bun test
 
       - name: Publish to npm
-        run: npm publish --access public
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view @rahadiana/opencode-ultrapress@$VERSION version &>/dev/null; then
+            echo "Version $VERSION already published — skipping."
+          else
+            npm publish --access public
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
