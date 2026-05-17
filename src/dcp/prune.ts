@@ -49,6 +49,7 @@ export function applyPruning(
   messages: MessageLike[],
   preserveLastN: number = 0,
   scoreThreshold: number = 0,
+  onBlockPruned?: (blockId: number, removedMessages: MessageLike[]) => void,
 ): { prunedCount: number; injectedCount: number } {
   const blocks = CompressState.getAllBlocks()
   if (blocks.length === 0) return { prunedCount: 0, injectedCount: 0 }
@@ -80,6 +81,9 @@ export function applyPruning(
     const result = pruneBlock(messages, block, cutoffIdx, scoreKeepIds)
     prunedCount += result.removed
     injectedCount += result.injected
+    if (result.removed > 0 && onBlockPruned && result.removedMessages) {
+      onBlockPruned(block.blockId, result.removedMessages)
+    }
   }
 
   return { prunedCount, injectedCount }
@@ -90,7 +94,7 @@ function pruneBlock(
   block: CompressionBlock,
   cutoffIdx: number = 0,
   scoreKeepIds?: Set<string>,
-): { removed: number; injected: number } {
+): { removed: number; injected: number; removedMessages?: MessageLike[] } {
   let injectedCount = 0
 
   const startIdx = messages.findIndex(m => m.id === block.startId)
@@ -142,7 +146,7 @@ function pruneBlock(
   messages.length = 0
   messages.push(...result)
 
-  return { removed: toRemove.length, injected: injectedCount }
+  return { removed: toRemove.length, injected: injectedCount, removedMessages: toRemove }
 }
 
 /**

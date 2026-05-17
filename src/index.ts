@@ -9,7 +9,9 @@ import { processToolOutput } from "./layers/layer1-output-filter.js"
 import { processMessageContext } from "./layers/layer2-caveman.js"
 import { processCompactingHook } from "./layers/layer3-dcp.js"
 import { compressToolDefinition } from "./dcp/compress-tool.js"
+import { expandToolDefinition } from "./dcp/expand-tool.js"
 import { applyPruning } from "./dcp/prune.js"
+import { storeOriginalContent } from "./dcp/compress-state.js"
 import { resetContextTokens, setRealContextTokens } from "./dcp/context-monitor.js"
 import { applyCleanup, handleTurnTick } from "./layers/layer4-cleanup.js"
 import { handleSlashCommand } from "./commands/slash.js"
@@ -71,7 +73,8 @@ export async function server(ctx: any): Promise<Hooks> {
   return {
     // ─── CUSTOM TOOLS ───────────────────────────────────
     tool: {
-       "ultrapress_compress": compressToolDefinition
+       "ultrapress_compress": compressToolDefinition,
+       "ultrapress_expand": expandToolDefinition,
     },
 
     /**
@@ -199,7 +202,11 @@ export async function server(ctx: any): Promise<Hooks> {
                     parts: m.parts || [],
                  }))
 
-              const { prunedCount } = applyPruning(prunableMessages, config.summarization.preserveLastN, config.summarization.scoreThreshold)
+              const { prunedCount } = applyPruning(prunableMessages, config.summarization.preserveLastN, config.summarization.scoreThreshold,
+                (blockId, removedMessages) => {
+                  storeOriginalContent(blockId, removedMessages)
+                }
+              )
 
               if (prunedCount > 0) {
                   // Rebuild output.message from pruned array

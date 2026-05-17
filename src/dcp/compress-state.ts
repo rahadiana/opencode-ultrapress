@@ -17,6 +17,8 @@ export interface CompressionBlock {
   /** IDs of tool calls whose outputs were preserved in the summary */
   preservedToolIds: string[]
   createdAt: number
+  /** Original message contents stored for reversible expansion (plugin memory, not LLM context) */
+  originalEntries?: Array<{ id: string; role: string; content: string }>
 }
 
 let nextBlockId = 0
@@ -88,6 +90,59 @@ export function getEffectiveSummary(blockId: number): string {
   if (nestedSummaries.length === 0) return block.summary
   
   return [...nestedSummaries, block.summary].join("\n\n")
+}
+
+// ─── Reversible Compression ────────────────────────────────────────────
+
+/**
+ * Store original message content alongside a compression block.
+ * This keeps original text in plugin memory (NOT in LLM context)
+ * so the LLM can call ultrapress_expand to retrieve details it needs.
+ */
+export function storeOriginalContent(
+  blockId: number,
+  messages: Array<{ id: string; role: string; content?: string; parts?: any[] }>,
+): void {
+  const block = blocksById.get(blockId)
+  if (!block) return
+
+  const entries: Array<{ id: string; role: string; content: string }> = []
+  for (const msg of messages) {
+    let content = msg.content || ""
+    if (!content && msg.parts) {
+      for (const part of msg.parts) {
+        if (part.type === "text" || part.type === "tool") {
+          content += (content ? "\n" : "") + (part.text || part.output || "")
+        }
+      }
+    }
+    if (content) {
+      entries.push({ id: msg.id, role: msg.role, content })
+    }
+  }
+  block.originalEntries = entries
+}
+
+/**
+ * Expand a compressed block — return original message contents.
+ * Used by ultrapress_expand tool to restore context when LLM needs details.
+ */
+export function expandBlock(blockId: number): Array<{ id: string; role: string; content: string }> | null {
+  const block = blocksById.get(blockId)
+  if (!block || !block.originalEntries) return null
+  return block.originalEntries
+}
+
+/**
+ * Find a block by topic substring or blockId.
+ */
+export function findBlock(query: string): CompressionBlock | undefined {
+  const id = parseInt(query, 10)
+  if (!isNaN(id)) return blocksById.get(id)
+  for (const block of blocksById.values()) {
+    if (block.topic.toLowerCase().includes(query.toLowerCase())) return block
+  }
+  return undefined
 }
 
 /** Reset all state (for testing) */
