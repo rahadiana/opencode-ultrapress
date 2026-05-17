@@ -19,8 +19,11 @@ export function handleSlashCommand(
     case "stats":
       return buildStatsResponse(stats, config)
     case "context":
+    case "ctx":
+    case "c":
       return buildContextResponse(stats, config)
     case "compress":
+    case "prune":
       return buildCompressResponse(stats, config)
     case "mode":
       if (arg === "nlp" || arg === "mlm" || arg === "llm") {
