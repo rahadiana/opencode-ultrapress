@@ -14,70 +14,70 @@
 
 </div>
 
-> **UltraPress** menghemat token context window melalui 4 layer kompresi yang berjalan otomatis di latar belakang — dari filtering output CLI, semantic compression, dynamic context pruning, hingga auto-cleanup. LLM kamu tetap pintar, token tetap hemat.
+> **UltraPress** saves context window tokens through 4 compression layers that run automatically in the background — from CLI output filtering, semantic compression, dynamic context pruning, to auto-cleanup. Your LLM stays smart, tokens stay lean.
 
 ---
 
-## 📑 Daftar Isi
+## 📑 Table of Contents
 
-- [⚡ Instalasi & Setup](#-instalasi--setup)
-  - [Persyaratan Sistem](#persyaratan-sistem)
-  - [Install dari GitHub](#1-install-plugin)
-  - [Daftarkan ke OpenCode](#2-daftarkan-ke-opencode)
-  - [Konfigurasi Personal](#3-opsional-buat-konfigurasi-personal)
-  - [Verifikasi Instalasi](#verifikasi-instalasi)
+- [⚡ Installation & Setup](#-installation--setup)
+  - [System Requirements](#system-requirements)
+  - [Install from GitHub](#1-install-the-plugin)
+  - [Register to OpenCode](#2-register-to-opencode)
+  - [Personal Configuration](#3-optional-create-personal-configuration)
+  - [Verify Installation](#verify-installation)
   - [Uninstall](#uninstall)
-- [🛠 Arsitektur 4-Layer](#-arsitektur-4-layer)
+- [🛠 4-Layer Architecture](#-4-layer-architecture)
   - [Pipeline Flow](#pipeline-flow)
   - [Layer 1 — Smart Output Filter](#layer-1--smart-output-filter)
   - [Layer 2 — GSC Semantic Compression](#layer-2--gsc-semantic-compression)
   - [Layer 3 — Dynamic Context Pruning (DCP)](#layer-3--dynamic-context-pruning-dcp)
   - [Layer 4 — Session Auto-Cleanup](#layer-4--session-auto-cleanup)
-- [⚙️ Konfigurasi](#️-konfigurasi)
-  - [Dokumentasi lengkap →](./docs/konfigurasi-lengkap.md)
-- [⌨️ Slash Command `/up`](#️-slash-command-up)
-  - [Daftar Sub-command](#daftar-sub-command)
-  - [Contoh Output](#contoh-output)
-- [❷ Support MLM & NLP](#-support-mlm--nlp)
-  - [Mode NLP (Default)](#mode-nlp-default)
-  - [Mode MLM (Experimental)](#mode-mlm-experimental)
-  - [Perbandingan Mode](#perbandingan-mode)
-- [🏗 Arsitektur Kode](#-arsitektur-kode)
-  - [Struktur Direktori](#struktur-direktori)
+- [⚙️ Configuration](#️-configuration)
+  - [Full documentation →](./docs/konfigurasi-lengkap.md)
+- [⌨️ `/up` Slash Command](#️-up-slash-command)
+  - [Sub-command List](#sub-command-list)
+  - [Example Output](#example-output)
+- [❷ MLM & NLP Support](#-mlm--nlp-support)
+  - [NLP Mode (Default)](#nlp-mode-default)
+  - [MLM Mode (Experimental)](#mlm-mode-experimental)
+  - [Mode Comparison](#mode-comparison)
+- [🏗 Code Architecture](#-code-architecture)
+  - [Directory Structure](#directory-structure)
   - [Hook Registration Map](#hook-registration-map)
   - [Data Flow Detail](#data-flow-detail)
-- [🧪 Pengujian](#-pengujian)
+- [🧪 Testing](#-testing)
 - [📊 Benchmark](#-benchmark)
-- [🚀 Pengembangan Lokal](#-pengembangan-lokal)
+- [🚀 Local Development](#-local-development)
 - [❓ FAQ & Troubleshooting](#-faq--troubleshooting)
 - [🗺 Roadmap](#-roadmap)
-- [🤝 Kontribusi](#-kontribusi)
+- [🤝 Contributing](#-contributing)
 - [📝 Changelog](#-changelog)
 - [📄 License](#-license)
 
 ---
 
-## ⚡ Instalasi & Setup
+## ⚡ Installation & Setup
 
-### Persyaratan Sistem
+### System Requirements
 
-| Dependency | Versi Minimum | Catatan |
+| Dependency | Minimum Version | Notes |
 | :--- | :--- | :--- |
-| **Node.js** | `>= 18` | Direkomendasikan Node 22 LTS |
-| **OpenCode AI** | Latest | Menggunakan `@opencode-ai/plugin ^1.14` |
-| **Git** | Any | Diperlukan untuk install dari GitHub |
-| **Bun** | Latest | Hanya untuk development/testing |
-| **@huggingface/transformers** | Auto-install | Hanya digunakan jika mode `mlm` aktif |
+| **Node.js** | `>= 18` | Node 22 LTS recommended |
+| **OpenCode AI** | Latest | Uses `@opencode-ai/plugin ^1.14` |
+| **Git** | Any | Required for GitHub install |
+| **Bun** | Latest | For development/testing only |
+| **@huggingface/transformers** | Auto-install | Only used when `mlm` mode is active |
 
-### 1. Install Plugin
+### 1. Install the Plugin
 
-> ⚠️ **Belum tersedia di npm.** Untuk saat ini, install langsung dari GitHub.
+> ⚠️ **Not yet available on npm.** For now, install directly from GitHub.
 
 ```bash
-# Dari GitHub (direkomendasikan — selalu versi terbaru)
+# From GitHub (recommended — always the latest version)
 npm install -g github:rahadiana/opencode-ultrapress
 
-# Atau clone & link manual
+# Or clone & link manually
 git clone https://github.com/rahadiana/opencode-ultrapress.git
 cd opencode-ultrapress
 npm install
@@ -85,11 +85,11 @@ npm run build
 npm link
 ```
 
-> 💡 **Nama paket**: `@rahadiana/opencode-ultrapress` (akan tersedia di npm setelah rilis stabil)
+> 💡 **Package name**: `@rahadiana/opencode-ultrapress` (will be available on npm after stable release)
 
-### 2. Daftarkan ke OpenCode
+### 2. Register to OpenCode
 
-Tambahkan plugin ke file konfigurasi OpenCode di `~/.config/opencode/config.json`:
+Add the plugin to the OpenCode configuration file at `~/.config/opencode/config.json`:
 
 ```json
 {
@@ -97,53 +97,53 @@ Tambahkan plugin ke file konfigurasi OpenCode di `~/.config/opencode/config.json
 }
 ```
 
-> 💡 **Tips**: OpenCode akan otomatis me-resolve plugin yang diinstal secara global melalui runtime `@opencode-ai/plugin`. Restart OpenCode setelah menambahkan plugin.
+> 💡 **Tip**: OpenCode will auto-resolve globally installed plugins via the `@opencode-ai/plugin` runtime. Restart OpenCode after adding the plugin.
 
-### 3. (Opsional) Buat Konfigurasi Personal
+### 3. (Optional) Create Personal Configuration
 
-UltraPress bekerja out-of-the-box dengan default terbaik. Untuk kustomisasi:
+UltraPress works out-of-the-box with sensible defaults. For customization:
 
 ```bash
-# Install dari GitHub → copy dari repo yang sudah di-clone
+# Install from GitHub → copy from the cloned repo
 cp ultrapress.jsonc.example ~/.config/opencode/ultrapress.json
 
-# Atau dari global install
+# Or from global install
 cp $(npm root -g)/@rahadiana/opencode-ultrapress/ultrapress.json.example ~/.config/opencode/ultrapress.json
 ```
 
-Kemudian edit `~/.config/opencode/ultrapress.json` sesuai kebutuhan. Jika file tidak ditemukan, UltraPress akan otomatis membuatnya dengan nilai default saat pertama kali dijalankan.
+Then edit `~/.config/opencode/ultrapress.json` as needed. If the file is not found, UltraPress will automatically create it with default values on first run.
 
-### Verifikasi Instalasi
+### Verify Installation
 
-Setelah restart OpenCode, ketik di chat:
+After restarting OpenCode, type in chat:
 
 ```
 /up stats
 ```
 
-Jika muncul dashboard statistik, UltraPress sudah aktif. Jika tidak:
-1. Pastikan plugin ada di `config.json` → `"plugins": ["@rahadiana/opencode-ultrapress"]`
-2. Cek log OpenCode untuk error
-3. Pastikan Node.js >= 18 terinstall (`node --version`)
+If a statistics dashboard appears, UltraPress is active. If not:
+1. Ensure the plugin is in `config.json` → `"plugins": ["@rahadiana/opencode-ultrapress"]`
+2. Check OpenCode logs for errors
+3. Ensure Node.js >= 18 is installed (`node --version`)
 
 ### Uninstall
 
 ```bash
-# Jika install dari GitHub (global)
+# If installed from GitHub (global)
 npm uninstall -g @rahadiana/opencode-ultrapress
 
-# Jika pakai npm link
+# If using npm link
 npm unlink -g @rahadiana/opencode-ultrapress
 
-# Bersihkan config
+# Clean up config
 rm ~/.config/opencode/ultrapress.json
 ```
 
 ---
 
-## 🛠 Arsitektur 4-Layer
+## 🛠 4-Layer Architecture
 
-UltraPress mencegat alur pesan OpenCode di 4 titik berbeda, masing-masing dengan strategi kompresi yang spesifik.
+UltraPress intercepts OpenCode message flow at 4 different points, each with a specific compression strategy.
 
 ### Pipeline Flow
 
@@ -167,28 +167,28 @@ flowchart LR
 
 ### Layer 1 — Smart Output Filter
 
-> **Hook**: `tool.execute.after` · **File**: `layer1-output-filter.ts` · **Filter**: `src/filters/`
+> **Hook**: `tool.execute.after` · **File**: `layer1-output-filter.ts` · **Filters**: `src/filters/`
 
-Mencegat output dari tool CLI **sebelum** masuk ke context window. Layer paling agresif — langsung memotong log yang tidak perlu.
+Intercepts CLI tool output **before** it enters the context window. The most aggressive layer — directly cuts unnecessary logs.
 
-**Strategi Utama:**
+**Core Strategies:**
 
-| Strategi | Deskripsi |
+| Strategy | Description |
 | :--- | :--- |
-| **Domain Routing** | Setiap tool CLI dirutekan ke filter spesifik: `git`, `npm/node`, `pytest/jest`, dan filesystem. Tool yang tidak dikenal masuk ke generic filter. |
-| **Middle-out Truncation** | Memotong log dari tengah, mempertahankan awal (konteks) dan akhir (error/result). Lebih pintar dari head/tail truncation. |
-| **Deduplication** | Menghapus baris log berulang yang identik secara real-time. Sangat efektif untuk log build & test. |
-| **Tee Save** | Jika output terpotong, log asli disimpan ke file `.log` sementara agar tetap bisa diakses jika diperlukan. |
+| **Domain Routing** | Each CLI tool is routed to a specific filter: `git`, `npm/node`, `pytest/jest`, and filesystem. Unknown tools go to the generic filter. |
+| **Middle-out Truncation** | Truncates logs from the middle, preserving the beginning (context) and end (error/result). Smarter than head/tail truncation. |
+| **Deduplication** | Removes identical repeated log lines in real-time. Very effective for build & test logs. |
+| **Tee Save** | If output is truncated, the original log is saved to a temporary `.log` file so it can still be accessed if needed. |
 
-**Filter Bawaan:**
+**Built-in Filters:**
 
 | Filter | File | Trigger Tools |
 | :--- | :--- | :--- |
-| **Git** | `filters/git.ts` | `git diff`, `git log`, `git show` — hapus diff hunks yang redundant, pertahankan summary |
-| **Test** | `filters/test.ts` | `pytest`, `jest`, `vitest`, `mocha` — ringkas failure output, hapus passing tests |
-| **Bash** | `filters/bash.ts` | Generic shell output — dedup baris, potong middle-out |
-| **Filesystem** | `filters/fs.ts` | `ls`, `cat`, `find` — batasi jumlah file, truncate konten panjang |
-| **Generic** | `filters/generic.ts` | Fallback untuk semua tool lain — middle-out truncation + dedup |
+| **Git** | `filters/git.ts` | `git diff`, `git log`, `git show` — remove redundant diff hunks, keep summary |
+| **Test** | `filters/test.ts` | `pytest`, `jest`, `vitest`, `mocha` — summarize failure output, remove passing tests |
+| **Bash** | `filters/bash.ts` | Generic shell output — dedup lines, middle-out truncation |
+| **Filesystem** | `filters/fs.ts` | `ls`, `cat`, `find` — limit file count, truncate long content |
+| **Generic** | `filters/generic.ts` | Fallback for all other tools — middle-out truncation + dedup |
 
 ---
 
@@ -196,21 +196,21 @@ Mencegat output dari tool CLI **sebelum** masuk ke context window. Layer paling 
 
 > **Hook**: `chat.message` · **File**: `layer2-caveman.ts` · **Engine**: `src/caveman/`
 
-Mengompresi teks pesan secara **semantik** — menghilangkan kata-kata tidak penting tanpa mengubah makna. Layer 2 dan Layer 3 **tidak saling kompresi** — tidak ada double compression.
+Compresses message text **semantically** — removes unimportant words without changing meaning. Layer 2 and Layer 3 **do not compress each other** — no double compression.
 
-**Aturan Kompresi:**
+**Compression Rules:**
 
-- Kata sambung (`yang`, `dan`, `akan`, `bahwa`) → dihapus
-- Kata ganti berlebihan → dipadatkan
-- Redundansi ("saya pikir saya akan" → "saya akan") → dihapus
-- Spasi ganda, whitespace tidak perlu → dinormalisasi
-- **Code blocks** (dalam ` ``` `) → **TIDAK PERNAH** disentuh
-- **Error messages & stack traces** → diproteksi penuh
-- Pesan < 200 karakter → di-skip
+- Conjunctions (`that`, `and`, `will`, `which`) → removed
+- Excessive pronouns → condensed
+- Redundancy ("I think I will" → "I will") → removed
+- Double spaces, unnecessary whitespace → normalized
+- **Code blocks** (inside ` ``` `) → **NEVER** touched
+- **Error messages & stack traces** → fully protected
+- Messages < 200 characters → skipped
 
-**Mode Operasi:**
+**Operating Modes:**
 
-Lihat [❷ Support MLM & NLP](#-support-mlm--nlp) untuk detail perbandingan NLP vs MLM.
+See [❷ MLM & NLP Support](#-mlm--nlp-support) for detailed NLP vs MLM comparison.
 
 ---
 
@@ -218,38 +218,38 @@ Lihat [❷ Support MLM & NLP](#-support-mlm--nlp) untuk detail perbandingan NLP 
 
 > **Hook**: `chat.message` (pruning) + `tool.execute.after` (compress tool) · **File**: `layer3-dcp.ts` · **Engine**: `src/dcp/`
 
-Sistem paling canggih: **memberi otonomi kepada LLM untuk mengelola memorinya sendiri**. Berbeda dari Layer 2 yang hanya mengompresi teks, Layer 3 **benar-benar menghapus pesan lama dari context window** dan menggantinya dengan ringkasan.
+The most advanced system: **gives LLM autonomy to manage its own memory**. Unlike Layer 2 which only compresses text, Layer 3 **actually removes old messages from the context window** and replaces them with summaries.
 
-**Mekanisme:**
+**Mechanism:**
 
 ```
-1. Context Monitor → deteksi token mendekati maxContextLimit
-2. Autonomous Nudge → sisipkan prompt ke user message: "context window hampir penuh, panggil ultrapress_compress"
-3. LLM memanggil → ultrapress_compress(mode="range", from=<id>, to=<id>)
-4. Compression Block → disimpan di memory (compress-state.ts)
-5. chat.message hook → cek block pending → hapus pesan dalam range → sisipkan ringkasan sebagai synthetic message
+1. Context Monitor → detect tokens approaching maxContextLimit
+2. Autonomous Nudge → inject prompt into user message: "context window nearly full, call ultrapress_compress"
+3. LLM calls → ultrapress_compress(mode="range", from=<id>, to=<id>)
+4. Compression Block → stored in memory (compress-state.ts)
+5. chat.message hook → check pending blocks → remove messages in range → inject summary as synthetic message
 ```
 
-**Fitur Kunci:**
+**Key Features:**
 
-| Fitur | Deskripsi |
+| Feature | Description |
 | :--- | :--- |
-| **Block-based Pruning** | Saat `ultrapress_compress` dipanggil, LLM menentukan range pesan yang akan diringkas. Block disimpan, lalu dieksekusi pada chat **berikutnya** (bukan saat ini — menghindari race condition). |
-| **prune via `chat.message` Hook** | Setiap pesan baru → plugin memeriksa block pending → menghapus pesan dalam range dari array context → menyisipkan ringkasan. |
-| **Protected Content** | Tool output penting (`task`, `write`, `edit`, `bash` hasil sukses, `read`) dilindungi dari pruning. Hanya `read` output yang difilter. Lihat `protected-content.ts`. |
-| **Nesting Support** | Kompresi bisa dilakukan di atas kompresi sebelumnya. Ringkasan bertingkat digabung otomatis. |
-| **`preserveLastN`** | Melindungi N pesan **terakhir** dari pruning — menjaga konteks percakapan terkini tetap utuh. Default: `3`. Set ke `0` untuk disable. |
-| **Multi-Signal Scoring** | Selain `preserveLastN`, tiap pesan diskor dari 5 sinyal (recency, role, tool type, keyword, content size). Pesan dengan score tinggi tetap dipertahankan meskipun masuk block lama. Default: off (`scoreThreshold: 0`), rekomendasi: `0.45`. |
-| **Reversible Compression** | `ultrapress_expand` tool — LLM bisa "mengembangkan" kembali block yang sudah diringkas untuk lihat konten asli. Konten asli disimpan di plugin memory (bukan di context LLM). |
-| **Nudge @70%** | Nudge dikirim saat context mencapai 70% limit (bukan 100%), memberi LLM waktu untuk kompresi sebelum context benar-benar penuh. |
-| **summaryBuffer** | Setelah pruning, memberi ruang napas (tidak langsung trigger nudge lagi). |
+| **Block-based Pruning** | When `ultrapress_compress` is called, LLM determines the message range to summarize. Block is stored, then executed on the **next** chat (not current — avoids race condition). |
+| **prune via `chat.message` Hook** | Each new message → plugin checks pending blocks → removes messages in range from context array → injects summary. |
+| **Protected Content** | Important tool output (`task`, `write`, `edit`, `bash` success results, `read`) is protected from pruning. Only `read` output is filtered. See `protected-content.ts`. |
+| **Nesting Support** | Compression can be done on top of previous compression. Nested summaries are auto-merged. |
+| **`preserveLastN`** | Protects the **last** N messages from pruning — keeps recent conversation context intact. Default: `3`. Set to `0` to disable. |
+| **Multi-Signal Scoring** | In addition to `preserveLastN`, each message is scored from 5 signals (recency, role, tool type, keyword, content size). High-scoring messages are preserved even in old blocks. Default: off (`scoreThreshold: 0`), recommended: `0.45`. |
+| **Reversible Compression** | `ultrapress_expand` tool — LLM can "expand" previously summarized blocks to see the original content. Original content is stored in plugin memory (not in LLM context). |
+| **Nudge @70%** | Nudge is sent when context reaches 70% limit (not 100%), giving LLM time to compress before context is truly full. |
+| **summaryBuffer** | After pruning, provides breathing room (no immediate re-nudge). |
 
-**Dua Mode Pruning:**
+**Two Pruning Modes:**
 
-| Mode | Deskripsi |
+| Mode | Description |
 | :--- | :--- |
-| `range` | Kompresi berbasis rentang: pilih from_id dan to_id. Semua pesan di antaranya diringkas menjadi satu. |
-| `message` | Kompresi surgical: pilih satu atau beberapa ID pesan spesifik untuk diringkas. |
+| `range` | Range-based compression: choose from_id and to_id. All messages in between are summarized into one. |
+| `message` | Surgical compression: choose one or more specific message IDs to summarize. |
 
 ---
 
@@ -257,23 +257,23 @@ Sistem paling canggih: **memberi otonomi kepada LLM untuk mengelola memorinya se
 
 > **Hook**: `tool.execute.after` + `session.compacting` · **File**: `layer4-cleanup.ts`
 
-Membersihkan "sampah" dari context window secara otomatis.
+Automatically cleans "garbage" from the context window.
 
-**Fitur:**
+**Features:**
 
-| Fitur | Deskripsi |
+| Feature | Description |
 | :--- | :--- |
-| **Error Purging** | Menghapus pesan error/tool failure setelah N turn chat (default: 4 turn). Error basi hanya membuang token. |
-| **Tool-Call Dedup** | Mencegah LLM mengulangi tool call yang identik (tool + args sama) dalam session yang sama. |
+| **Error Purging** | Removes error/failed tool messages after N chat turns (default: 4 turns). Stale errors only waste tokens. |
+| **Tool-Call Dedup** | Prevents LLM from repeating identical tool calls (same tool + args) in the same session. |
 
 ---
 
-## ⚙️ Konfigurasi
+## ⚙️ Configuration
 
-> 📖 **Dokumentasi konfigurasi lengkap** (semua key, tipe, default, contoh, preset, custom filter, troubleshooting) ada di:
+> 📖 **Full configuration documentation** (all keys, types, defaults, examples, presets, custom filters, troubleshooting) at:
 > [`docs/konfigurasi-lengkap.md`](./docs/konfigurasi-lengkap.md)
 
-### Struktur Dasar
+### Basic Structure
 
 File: `~/.config/opencode/ultrapress.json`
 
@@ -281,7 +281,7 @@ File: `~/.config/opencode/ultrapress.json`
 {
   "enabled": true,           // Master switch
   "notification": "minimal", // "off" | "minimal" | "detailed"
-  "autoUpdate": true,        // Auto-update dari npm
+  "autoUpdate": true,        // Auto-update from npm
 
       "outputFilter": {},
       "semantic": {},
@@ -290,33 +290,33 @@ File: `~/.config/opencode/ultrapress.json`
 }
 ```
 
-| Layer | Key | Fungsi |
+| Layer | Key | Function |
 | :--- | :--- | :--- |
-| **L1** | `outputFilter` | Batasi panjang output CLI, filter baris repetitive |
-| **L2** | `semantic` | Kompresi teks NLP/MLM tanpa merusak makna |
-| **L3** | `summarization` | Hapus pesan lama, ganti ringkasan, proteksi `preserveLastN` |
-| **L4** | `cleanup` | Dedup tool call, auto-purge error basi |
+| **L1** | `outputFilter` | Limit CLI output length, filter repetitive lines |
+| **L2** | `semantic` | NLP/MLM text compression without destroying meaning |
+| **L3** | `summarization` | Remove old messages, replace with summary, `preserveLastN` protection |
+| **L4** | `cleanup` | Dedup tool calls, auto-purge stale errors |
 
-> 👉 **[Buka dokumentasi lengkap →](./docs/konfigurasi-lengkap.md)** mencakup semua key, tipe, default, custom filter, preset (Hemat Maksimal / Preservasi / Silent / MLM), dan troubleshooting.
+> 👉 **[Open full documentation →](./docs/konfigurasi-lengkap.md)** covers all keys, types, defaults, custom filters, presets (Max Savings / Preservation / Silent / MLM), and troubleshooting.
 
 ---
 
-## ⌨️ Slash Command `/up`
+## ⌨️ `/up` Slash Command
 
-Semua interaksi dengan UltraPress melalui satu command: `/up`.
+All interactions with UltraPress via a single command: `/up`.
 
-### Daftar Sub-command
+### Sub-command List
 
-| Command | Alias | Deskripsi |
+| Command | Alias | Description |
 | :--- | :--- | :--- |
-| `/up stats` | `s`, `stat` | Dashboard penghematan token sesi ini |
-| `/up context` | `c`, `ctx` | Status context window: kapasitas, limit, sisa |
-| `/up compress` | `comp` | Tampilkan status layer + panduan kompresi |
-| `/up help` | `h`, `?` | Bantuan command |
+| `/up stats` | `s`, `stat` | Current session token savings dashboard |
+| `/up context` | `c`, `ctx` | Context window status: capacity, limit, remaining |
+| `/up compress` | `comp` | Show layer status + compression guide |
+| `/up help` | `h`, `?` | Command help |
 
-**Catatan**: Sub-command bersifat case-insensitive dan mendukung fuzzy matching parsial.
+**Note**: Sub-commands are case-insensitive and support partial fuzzy matching.
 
-### Contoh Output
+### Example Output
 
 **`/up stats`**:
 
@@ -358,23 +358,23 @@ Semua interaksi dengan UltraPress melalui satu command: `/up`.
 
 ---
 
-## ❷ Support MLM & NLP
+## ❷ MLM & NLP Support
 
-### Mode NLP (Default)
+### NLP Mode (Default)
 
-Grammar stripping berbasis aturan linguistik. **Zero latency**, tidak memerlukan model eksternal.
+Rule-based grammar stripping using linguistic rules. **Zero latency**, no external model required.
 
-**Cara kerja:**
-1. Deteksi struktur kalimat (subjek, predikat, objek)
-2. Hapus kata sambung, kata ganti berlebihan, filler words
-3. Padatkan redundansi tanpa mengubah makna
-4. Proteksi code blocks & error messages
+**How it works:**
+1. Detect sentence structure (subject, predicate, object)
+2. Remove conjunctions, excessive pronouns, filler words
+3. Condense redundancy without changing meaning
+4. Protect code blocks & error messages
 
-### Mode MLM (Experimental)
+### MLM Mode (Experimental)
 
-Menggunakan **Masked Language Model** via `@huggingface/transformers` (Transformers.js) untuk tokenisasi yang lebih akurat.
+Uses **Masked Language Model** via `@huggingface/transformers` (Transformers.js) for more accurate tokenization.
 
-**Aktivasi:**
+**Activation:**
 
 ```json
 {
@@ -385,30 +385,30 @@ Menggunakan **Masked Language Model** via `@huggingface/transformers` (Transform
 }
 ```
 
-**Catatan Penting:**
-- ⚠️ Model di-download otomatis saat pertama kali (~70MB untuk distilbert-base)
-- ⚠️ First-run latency 5-15 detik untuk load model
-- ⚠️ RAM usage bertambah ~200MB saat model aktif
-- ⚠️ Kompatibilitas: CPU-only (tidak memerlukan GPU)
-- 🌐 Untuk Bahasa Indonesia: gunakan `Xenova/bert-base-multilingual-uncased`
+**Important Notes:**
+- ⚠️ Model auto-downloaded on first run (~70MB for distilbert-base)
+- ⚠️ First-run latency 5-15 seconds for model loading
+- ⚠️ RAM usage increases ~200MB when model is active
+- ⚠️ Compatibility: CPU-only (no GPU required)
+- 🌐 For Indonesian: use `Xenova/bert-base-multilingual-uncased`
 
-### Perbandingan Mode
+### Mode Comparison
 
-| Aspek | NLP | MLM | LLM |
+| Aspect | NLP | MLM | LLM |
 | :--- | :--- | :--- | :--- |
-| **Latensi** | < 1ms | 50-200ms | 1-5s |
+| **Latency** | < 1ms | 50-200ms | 1-5s |
 | **RAM** | 0 MB | ~70 MB (q8) | ~300 MB (q8) |
-| **Akurasi** | ~85% | ~95% | ~99% |
-| **Bahasa** | Indonesia + Inggris | 100+ bahasa | Semua |
-| **Koneksi Internet** | ❌ Tidak perlu | ❌ Hanya download awal | ❌ Hanya download awal |
-| **Stabil** | ✅ | ⚠️ Experimental | ⚠️ Experimental |
+| **Accuracy** | ~85% | ~95% | ~99% |
+| **Language** | Indonesian + English | 100+ languages | All |
+| **Internet Connection** | ❌ Not needed | ❌ Initial download only | ❌ Initial download only |
+| **Stable** | ✅ | ⚠️ Experimental | ⚠️ Experimental |
 | **Model** | — | `all-MiniLM-L6-v2` | `t5-small` (summarization) |
 
 ---
 
-## 🏗 Arsitektur Kode
+## 🏗 Code Architecture
 
-### Struktur Direktori
+### Directory Structure
 
 ```
 opencode-ultrapress/
@@ -453,7 +453,7 @@ opencode-ultrapress/
 ├── docs/
 │   └── image/
 │       └── banner.svg              # README banner
-├── ultrapress.jsonc.example        # Template konfigurasi (JSONC)
+├── ultrapress.jsonc.example        # Configuration template (JSONC)
 ├── tsconfig.json                   # TypeScript config
 ├── tsup.config.ts                  # Build config (tsup)
 ├── package.json
@@ -466,9 +466,9 @@ opencode-ultrapress/
 
 | OpenCode Hook | Trigger | UltraPress Handler | Layer |
 | :--- | :--- | :--- | :--- |
-| `tool.execute.after` | Setelah tool CLI selesai | Output filtering + token tracking + dedup | L1, L4 |
-| `chat.message` | Sebelum user message dikirim ke LLM | Pruning pending blocks + semantic compression + nudge injection | L2, L3 |
-| `command.execute.before` | User mengetik `/up` | Slash command handler | — |
+| `tool.execute.after` | After CLI tool completes | Output filtering + token tracking + dedup | L1, L4 |
+| `chat.message` | Before user message is sent to LLM | Pruning pending blocks + semantic compression + nudge injection | L2, L3 |
+| `command.execute.before` | User types `/up` | Slash command handler | — |
 | `experimental.session.compacting` | OpenCode compacting session | Protected context injection | L4 |
 | `config` | Plugin initialization | Register `/up` command | — |
 | `tool` (definition) | Plugin init | Register `ultrapress_compress` tool | L3 |
@@ -510,27 +510,27 @@ opencode-ultrapress/
 
 ---
 
-## 🧪 Pengujian
+## 🧪 Testing
 
-Jalankan seluruh test suite:
+Run the entire test suite:
 
 ```bash
 bun test
 ```
 
-| Test File | Cakupan | Layer |
+| Test File | Coverage | Layer |
 | :--- | :--- | :--- |
 | `tests/layer1.test.ts` | Output filtering: domain routing, truncation, tee save, dedup | L1 |
 | `tests/layer2.test.ts` | Semantic compression: NLP grammar stripping, code block protection, min length skip | L2 |
 | `tests/layer3-dcp.test.ts` | DCP: pruning with preserveLastN, nudge frequency, nesting summaries, protected content | L3 |
 
 ```bash
-# Run spesifik layer
+# Run specific layer
 bun test tests/layer1.test.ts
 bun test tests/layer2.test.ts
 bun test tests/layer3-dcp.test.ts
 
-# Run dengan TypeScript type checking
+# Run with TypeScript type checking
 bun run lint
 ```
 
@@ -538,13 +538,13 @@ bun run lint
 
 ## 📊 Benchmark
 
-Jalankan benchmark lengkap untuk mengukur efektivitas **semua 4 layer**:
+Run the full benchmark to measure the effectiveness of **all 4 layers**:
 
 ```bash
 npm run benchmark
 ```
 
-### Hasil Benchmark Terbaru
+### Latest Benchmark Results
 
 ```
 ┌────────────────────────────────┬──────────────────────────────────────────┬────────────┬──────────────┬──────────┐
@@ -565,20 +565,20 @@ npm run benchmark
 ✅ Total: 9,349 → 4,587 tokens (51% overall savings)
 ```
 
-### Ringkasan per Layer
+### Layer Summary
 
-| Layer | Fixture | Avg Savings | Karakteristik |
+| Layer | Fixture | Avg Savings | Characteristics |
 | :--- | :--- | :--- | :--- |
-| **L1** Output Filter | 3 fixture | **21%** | Paling efektif untuk log CLI verbose (`git diff`: 42%). Output pendek tidak banyak terpengaruh. |
-| **L2** Semantic NLP | 1 fixture | **22%** | Konsisten mengompresi natural language tanpa merusak makna. Code blocks diproteksi penuh. |
-| **L3** DCP Pruning | 1 fixture | **73%** | Penghemat terbesar — menghapus 14 pesan lama & ganti 1 ringkasan. Efek compound di session panjang. |
-| **L4** Auto Cleanup | 2 fixture | **72%** | Dedup menghemat 62% dari tool call berulang. Error purge 100% setelah threshold. |
+| **L1** Output Filter | 3 fixtures | **21%** | Most effective for verbose CLI logs (`git diff`: 42%). Short output less affected. |
+| **L2** Semantic NLP | 1 fixture | **22%** | Consistently compresses natural language without destroying meaning. Code blocks fully protected. |
+| **L3** DCP Pruning | 1 fixture | **73%** | Biggest saver — removes 14 old messages & replaces with 1 summary. Compounding effect in long sessions. |
+| **L4** Auto Cleanup | 2 fixtures | **72%** | Dedup saves 62% from repeated tool calls. Error purge 100% after threshold. |
 
-> 💡 **Insight**: L3 (DCP) adalah layer dengan penghematan tertinggi karena menghapus pesan lama secara bulk. Dalam session panjang (100+ messages), efek komulatif L3 + L4 bisa mencapai **70-90% penghematan token**. Dataset dan script ada di [`benchmarks/`](./benchmarks/) — kontribusikan fixture dari stack kamu untuk hasil yang lebih representatif.
+> 💡 **Insight**: L3 (DCP) is the layer with the highest savings because it removes old messages in bulk. In long sessions (100+ messages), the cumulative effect of L3 + L4 can reach **70-90% token savings**. Dataset and scripts are in [`benchmarks/`](./benchmarks/) — contribute fixtures from your stack for more representative results.
 
 ---
 
-## 🚀 Pengembangan Lokal
+## 🚀 Local Development
 
 ```bash
 # 1. Clone repository
@@ -589,7 +589,7 @@ cd opencode-ultrapress
 npm install
 
 # 3. Build TypeScript
-npm run build          # tsup — compile ke dist/
+npm run build          # tsup — compile to dist/
 
 # 4. Development mode (watch)
 npm run dev            # tsup --watch
@@ -604,59 +604,59 @@ npm run lint           # tsc --noEmit
 npm run benchmark      # tsx benchmarks/run.ts
 ```
 
-**Workflow Development:**
+**Development Workflow:**
 
-1. Edit file di `src/`
-2. `npm run dev` untuk auto-rebuild
-3. `npm test` untuk verifikasi
-4. Restart OpenCode untuk reload plugin
-5. Test via `/up stats` di chat
+1. Edit files in `src/`
+2. `npm run dev` for auto-rebuild
+3. `npm test` to verify
+4. Restart OpenCode to reload plugin
+5. Test via `/up stats` in chat
 
 ---
 
 ## ❓ FAQ & Troubleshooting
 
 <details>
-<summary><b>Plugin tidak muncul setelah install</b></summary>
+<summary><b>Plugin doesn't appear after install</b></summary>
 
-1. Pastikan plugin terdaftar di `~/.config/opencode/config.json`:
+1. Ensure the plugin is registered in `~/.config/opencode/config.json`:
    ```json
    { "plugins": ["@rahadiana/opencode-ultrapress"] }
    ```
-2. Restart OpenCode sepenuhnya (bukan reload window)
-3. Cek apakah package terinstall: `npm list -g @rahadiana/opencode-ultrapress`
+2. Restart OpenCode completely (not just reload window)
+3. Check if the package is installed: `npm list -g @rahadiana/opencode-ultrapress`
 </details>
 
 <details>
 <summary><b>Error "Cannot find module @huggingface/transformers"</b></summary>
 
-Mode MLM memerlukan dependency tambahan. Install manual:
+MLM mode requires an additional dependency. Install manually:
 ```bash
 npm install -g @huggingface/transformers
 ```
-Atau switch ke mode `"nlp"` yang tidak memerlukan dependency eksternal.
+Or switch to `"nlp"` mode which does not require external dependencies.
 </details>
 
 <details>
-<summary><b>OpenCode terasa lambat setelah install</b></summary>
+<summary><b>OpenCode feels slow after install</b></summary>
 
-- Cek mode semantic: `"mode": "mlm"` — MLM loading model di awal bisa lambat. Switch ke `"nlp"` untuk zero latency.
-- Cek `notification` level: `"detailed"` mencetak banyak log. Set ke `"minimal"`.
-- Pastikan `minLengthChars` tidak terlalu rendah (default 200 sudah optimal).
+- Check semantic mode: `"mode": "mlm"` — MLM model loading at startup can be slow. Switch to `"nlp"` for zero latency.
+- Check `notification` level: `"detailed"` prints many logs. Set to `"minimal"`.
+- Ensure `minLengthChars` is not too low (default 200 is optimal).
 </details>
 
 <details>
-<summary><b>Pesan penting saya terhapus oleh pruning</b></summary>
+<summary><b>My important messages were deleted by pruning</b></summary>
 
-- Naikkan `preserveLastN` (default 3 → coba 5 atau 7)
-- Tool output penting otomatis diproteksi (`task`, `write`, `edit`, `bash`)
-- Jika tetap terhapus, laporkan sebagai bug dengan log detail
+- Increase `preserveLastN` (default 3 → try 5 or 7)
+- Important tool output is automatically protected (`task`, `write`, `edit`, `bash`)
+- If still deleted, report as a bug with detailed logs
 </details>
 
 <details>
-<summary><b>Bagaimana cara disable layer tertentu?</b></summary>
+<summary><b>How do I disable a specific layer?</b></summary>
 
-Set `"enabled": false` pada layer yang ingin dimatikan:
+Set `"enabled": false` on the layer you want to turn off:
 ```json
 {
   "semantic": { "enabled": false },
@@ -666,12 +666,12 @@ Set `"enabled": false` pada layer yang ingin dimatikan:
 </details>
 
 <details>
-<summary><b>Error TypeScript saat development</b></summary>
+<summary><b>TypeScript error during development</b></summary>
 
-Pastikan dependencies terinstall:
+Ensure dependencies are installed:
 ```bash
 npm install
-npm run lint    # tsc --noEmit untuk cek type error
+npm run lint    # tsc --noEmit to check for type errors
 ```
 </details>
 
@@ -679,7 +679,7 @@ npm run lint    # tsc --noEmit untuk cek type error
 
 ## 🗺 Roadmap
 
-| Fitur | Status | Target |
+| Feature | Status | Target |
 | :--- | :--- | :--- |
 | Layer 1: Domain-aware output filtering | ✅ Done | v0.1.0 |
 | Layer 2: NLP semantic compression | ✅ Done | v0.1.0 |
@@ -699,20 +699,20 @@ npm run lint    # tsc --noEmit untuk cek type error
 | TF-IDF scoring (MLM improvement) | 🚧 Planned | v0.2.0 |
 | Sentence similarity (MLM improvement) | 🚧 Planned | v0.2.0 |
 | Sub-agent (`task`) token tracking & compression | 💡 Idea | TBD |
-| UI stats dashboard di OpenCode | 💡 Idea | TBD |
-| Support lebih banyak bahasa (NLP) | 💡 Idea | TBD |
+| UI stats dashboard in OpenCode | 💡 Idea | TBD |
+| Support more languages (NLP) | 💡 Idea | TBD |
 
 ---
 
-## 🤝 Kontribusi
+## 🤝 Contributing
 
-Kontribusi sangat diterima! Area yang paling membutuhkan bantuan:
+Contributions are welcome! Areas most in need of help:
 
-1. **New Filters**: Tambahkan filter Layer 1 untuk framework/stack baru (Kubernetes, Docker, Terraform, Svelte, Flutter, dll).
-2. **MLM Roadmap**: Bantu implementasi TF-IDF scoring atau sentence similarity yang sebenarnya.
-3. **Benchmark Dataset**: Kontribusikan fixture data dari stack teknologi kamu.
-4. **Multi-language NLP**: Perluas aturan grammar stripping untuk lebih banyak bahasa.
-5. **Bug Reports**: Laporkan edge case — tool output yang tidak terfilter dengan baik, pesan penting yang terhapus, dll.
+1. **New Filters**: Add Layer 1 filters for new frameworks/stacks (Kubernetes, Docker, Terraform, Svelte, Flutter, etc.).
+2. **MLM Roadmap**: Help implement actual TF-IDF scoring or sentence similarity.
+3. **Benchmark Dataset**: Contribute fixture data from your tech stack.
+4. **Multi-language NLP**: Expand grammar stripping rules for more languages.
+5. **Bug Reports**: Report edge cases — poorly filtered tool output, important messages deleted, etc.
 
 ### Development Setup
 
@@ -728,16 +728,16 @@ npm run benchmark
 ### Pull Request Process
 
 1. Fork repository
-2. Buat branch fitur (`git checkout -b feature/amazing-filter`)
-3. Commit perubahan (`git commit -m 'Add amazing filter'`)
-4. Push ke branch (`git push origin feature/amazing-filter`)
-5. Buka Pull Request — pastikan `bun test` dan `npm run lint` passing
+2. Create feature branch (`git checkout -b feature/amazing-filter`)
+3. Commit changes (`git commit -m 'Add amazing filter'`)
+4. Push to branch (`git push origin feature/amazing-filter`)
+5. Open Pull Request — ensure `bun test` and `npm run lint` pass
 
 ---
 
 ## 📝 Changelog
 
-Lihat [CHANGELOG.md](./CHANGELOG.md) untuk riwayat lengkap perubahan per versi.
+See [CHANGELOG.md](./CHANGELOG.md) for the full version history.
 
 ---
 

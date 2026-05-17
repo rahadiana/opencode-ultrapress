@@ -2,7 +2,7 @@
 
 ## Pipeline Overview
 
-Data dari setiap interaksi di OpenCode mengalir melalui 4 layer pertahanan secara berurutan. Penting: setiap layer berjalan pada **hook yang berbeda**, bukan dalam satu pipeline yang sama.
+Data from every interaction in OpenCode flows through 4 defense layers sequentially. Important: each layer runs on a **different hook**, not within a single pipeline.
 
 ```mermaid
 flowchart LR
@@ -47,48 +47,48 @@ flowchart LR
 
 ---
 
-## Urutan Eksekusi Per Hook
+## Execution Order Per Hook
 
 ### `tool.execute.after`
-1. **Layer 1** — Filter output tool mentah sebelum masuk ke context window.
-2. **Layer 4 (Dedup)** — Cek apakah output identik dengan sebelumnya; jika ya, hapus.
+1. **Layer 1** — Filter raw tool output before it enters the context window.
+2. **Layer 4 (Dedup)** — Check if output is identical to previous; if yes, remove.
 
 ### `chat.message`
-1. **Layer 3 (DCP)** — Hitung estimasi token kumulatif. Jika mendekati limit, inject nudge prompt.
-2. **Layer 2 (GSC Semantic)** — Kompresi semantik pada pesan user/assistant yang lolos filter role & panjang minimum.
-3. **Layer 4 (Purge)** — Tandai pesan error lama untuk dihapus setelah N turn.
+1. **Layer 3 (DCP)** — Count cumulative token estimate. If approaching limit, inject nudge prompt.
+2. **Layer 2 (GSC Semantic)** — Semantic compression on user/assistant messages that pass role filter & minimum length.
+3. **Layer 4 (Purge)** — Mark old error messages for removal after N turns.
 
-### `experimental.session.compacting` _(jika OpenCode mensupport hook ini)_
-- **Layer 3 (Protected Context)** — Inject ringkasan yang dilindungi agar tidak hilang saat OpenCode melakukan auto-compaction.
+### `experimental.session.compacting` _(if OpenCode supports this hook)_
+- **Layer 3 (Protected Context)** — Inject protected summary so it won't be lost when OpenCode performs auto-compaction.
 
 ---
 
-## Kenapa Tidak Ada Double Compression?
+## Why There Is No Double Compression?
 
-Layer 2 dan Layer 3 **tidak saling kompresi satu sama lain** karena:
+Layer 2 and Layer 3 **do not compress each other** because:
 
-1. **Layer 2** beroperasi pada **teks pesan individu** (user message atau assistant response).
-2. **Layer 3** hanya **menghitung token** dan menyisipkan teks nudge baru — ia tidak mengkompresi ulang teks yang sudah ada.
-3. Layer 3 mendeklarasikan `ultrapress_compress` sebagai **tool untuk LLM** (bukan auto-compression). LLM yang secara otonom memanggil tool itu, bukan sistem UltraPress.
+1. **Layer 2** operates on **individual message text** (user message or assistant response).
+2. **Layer 3** only **counts tokens** and inserts new nudge text — it does not re-compress existing text.
+3. Layer 3 declares `ultrapress_compress` as a **tool for the LLM** (not auto-compression). The LLM autonomously calls that tool, not the UltraPress system.
 
 ---
 
 ## Error Handling Strategy
 
-| Layer | Behavior Saat Error |
+| Layer | Behavior on Error |
 | :--- | :--- |
-| Layer 1 | Fallback ke raw output — **tidak pernah crash** |
-| Layer 2 (NLP) | Fallback ke teks asli — compression dianggap gagal, session lanjut normal |
-| Layer 2 (MLM) | Fallback ke NLP mode — model gagal load, tapi session tetap jalan |
-| Layer 3 | Skip nudge — tidak ada efek samping |
-| Layer 4 | Skip purge — pesan lama tetap ada |
+| Layer 1 | Fallback to raw output — **never crashes** |
+| Layer 2 (NLP) | Fallback to original text — compression considered failed, session continues normally |
+| Layer 2 (MLM) | Fallback to NLP mode — model fails to load, but session keeps running |
+| Layer 3 | Skip nudge — no side effects |
+| Layer 4 | Skip purge — old messages remain |
 
-Semua layer menggunakan pola `try/catch` yang mengembalikan input asli (*passthrough*) pada kegagalan.
+All layers use a `try/catch` pattern that returns the original input (*passthrough*) on failure.
 
 ---
 
-## Keterbatasan yang Diketahui
+## Known Limitations
 
-- **MLM mode** saat ini menggunakan model sebagai tokenizer yang lebih akurat, bukan untuk inferensi penuh. Ini adalah **EXPERIMENTAL** feature. Lihat [MLM Mode](#mlm-mode-experimental) di README.
-- Token counting menggunakan heuristic berbasis karakter (3.7 chars/token untuk prosa), bukan `tiktoken`. Akurasi ~85-90% untuk campuran Inggris/kode.
-- Hook `tool.execute.after` hanya aktif jika OpenCode memanggil tool melalui agent loop — tidak berlaku untuk pesan manual.
+- **MLM mode** currently uses the model as a more accurate tokenizer, not for full inference. This is an **EXPERIMENTAL** feature. See [MLM Mode](#mlm-mode-experimental) in README.
+- Token counting uses character-based heuristics (3.7 chars/token for prose), not `tiktoken`. ~85-90% accuracy for mixed English/code.
+- The `tool.execute.after` hook only fires if OpenCode calls a tool through the agent loop — does not apply to manual messages.

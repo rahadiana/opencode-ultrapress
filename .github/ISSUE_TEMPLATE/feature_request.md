@@ -1,23 +1,23 @@
 ---
 name: Feature Request
-about: Usulan fitur baru — filter, language support, model, dll.
+about: Propose a new feature — filter, language support, model, etc.
 title: "[Feature] "
 labels: enhancement
 assignees: []
 ---
 
-## Deskripsi Fitur
+## Feature Description
 
-<!-- Jelaskan fitur yang diinginkan -->
+<!-- Describe the feature you want -->
 
 ## Use Case
 
-<!-- Kenapa fitur ini berguna? Siapa yang akan pakai? -->
+<!-- Why is this useful? Who would use it? -->
 
-## Usulan Implementasi
+## Proposed Implementation
 
-<!-- Kalau ada ide implementasi, tulis di sini -->
+<!-- If you have implementation ideas, write them here -->
 
-## Alternatif
+## Alternatives
 
-<!-- Adakah alternatif yang sudah kamu coba? -->
+<!-- Have you tried any alternatives? -->

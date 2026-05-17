@@ -1,14 +1,14 @@
 ---
 name: Bug Report
-about: Laporkan bug — output tidak terfilter, pesan penting terhapus, error, dll.
+about: Report a bug — unfiltered output, important messages removed, errors, etc.
 title: "[Bug] "
 labels: bug
 assignees: []
 ---
 
-## Deskripsi Bug
+## Bug Description
 
-<!-- Jelaskan apa yang terjadi -->
+<!-- Describe what happened -->
 
 ## Steps to Reproduce
 
@@ -18,7 +18,7 @@ assignees: []
 
 ## Expected Behavior
 
-<!-- Apa yang seharusnya terjadi -->
+<!-- What should have happened -->
 
 ## Environment
 
@@ -29,10 +29,10 @@ assignees: []
 
 ## Log / Screenshot
 
-<!-- Paste error log atau screenshot -->
+<!-- Paste error log or screenshot -->
 
 ## Config (ultrapress.json)
 
 ```json
-// Paste config kamu di sini
+// Paste your config here
 ```

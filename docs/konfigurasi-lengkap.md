@@ -1,18 +1,18 @@
-# ⚙️ Konfigurasi UltraPress — Referensi Lengkap
+# ⚙️ UltraPress Configuration — Complete Reference
 
 > File: `~/.config/opencode/ultrapress.json`
 
-UltraPress bekerja *out-of-the-box* dengan nilai default terbaik. File konfigurasi bersifat opsional — jika tidak ditemukan, plugin akan otomatis membuatnya saat pertama kali dijalankan.
+UltraPress works *out-of-the-box* with optimal default values. The configuration file is optional — if not found, the plugin will automatically create it on first run.
 
 ---
 
-## 📋 Struktur Dasar
+## 📋 Basic Structure
 
 ```jsonc
 {
   "enabled": true,           // Master switch
-  "notification": "minimal", // Level notifikasi
-  "autoUpdate": true,        // Auto-update dari npm
+  "notification": "minimal", // Notification level
+  "autoUpdate": true,        // Auto-update from npm
 
   // LAYER 1 — Output Filtering
   "outputFilter": { /* ... */ },
@@ -32,57 +32,57 @@ UltraPress bekerja *out-of-the-box* dengan nilai default terbaik. File konfigura
 
 ## 🔘 Global Settings
 
-| Key | Tipe | Default | Deskripsi |
+| Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `enabled` | `boolean` | `true` | Master switch. `false` = matikan seluruh plugin. |
-| `notification` | `"off"` / `"minimal"` / `"detailed"` | `"minimal"` | Seberapa detail log UltraPress di console OpenCode. |
-| `autoUpdate` | `boolean` | `true` | Auto-check & update dari npm saat OpenCode restart. |
+| `enabled` | `boolean` | `true` | Master switch. `false` = disable entire plugin. |
+| `notification` | `"off"` / `"minimal"` / `"detailed"` | `"minimal"` | How detailed UltraPress logs are in the OpenCode console. |
+| `autoUpdate` | `boolean` | `true` | Auto-check & update from npm when OpenCode restarts. |
 
 ---
 
 ## 🎯 Layer 1 — Output Filter
 
-Mencegat output tool CLI sebelum masuk context window. Paling efektif untuk log panjang & repetitive.
+Intercepts CLI tool output before it enters the context window. Most effective for long & repetitive logs.
 
-| Key | Tipe | Default | Deskripsi |
+| Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `outputFilter.enabled` | `boolean` | `true` | Aktifkan Layer 1. |
-| `outputFilter.maxCharsPerOutput` | `number` | `8000` | Batas karakter sebelum dipotong *middle-out*. Awal & akhir output dipertahankan. |
-| `outputFilter.teeSaveOnTruncate` | `boolean` | `true` | Jika output terpotong, simpan log asli ke file `.log` sementara. Berguna untuk debugging. |
-| `outputFilter.customFilters` | `CustomFilter[]` | `[]` | Filter kustom untuk tool CLI spesifik. [Lihat detail](#custom-filters). |
+| `outputFilter.enabled` | `boolean` | `true` | Enable Layer 1. |
+| `outputFilter.maxCharsPerOutput` | `number` | `8000` | Character limit before *middle-out* truncation. Beginning & end of output are preserved. |
+| `outputFilter.teeSaveOnTruncate` | `boolean` | `true` | If output is truncated, save the original log to a temporary `.log` file. Useful for debugging. |
+| `outputFilter.customFilters` | `CustomFilter[]` | `[]` | Custom filters for specific CLI tools. [See details](#custom-filters). |
 
-### Contoh Kasus
+### Example Use Case
 
 ```jsonc
 {
   "outputFilter": {
-    "maxCharsPerOutput": 4000,   // lebih agresif — potong di 4k karakter
+    "maxCharsPerOutput": 4000,   // more aggressive — truncate at 4k characters
     "teeSaveOnTruncate": true
   }
 }
 ```
 
-> 💡 Untuk sesi dengan banyak `git diff` atau `npm install`, turunkan `maxCharsPerOutput` ke 2000-4000.
+> 💡 For sessions with lots of `git diff` or `npm install`, lower `maxCharsPerOutput` to 2000-4000.
 
 ---
 
 ## 🧠 Layer 2 — Semantic Compression
 
-Mengompresi teks pesan secara semantik tanpa mengubah makna. Tidak menyentuh code blocks.
+Compresses message text semantically without changing meaning. Does not touch code blocks.
 
-| Key | Tipe | Default | Deskripsi |
+| Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `semantic.enabled` | `boolean` | `true` | Aktifkan Layer 2. |
-| `semantic.mode` | `"nlp"` / `"mlm"` / `"llm"` | `"nlp"` | Mode kompresi. NLP = rule-based (zero latency). MLM = AI-based embedding dedup. LLM = local summarization via `@huggingface/transformers`. |
-| `semantic.model` | `string` | `"Xenova/all-MiniLM-L6-v2"` | Model untuk mode `mlm` atau `llm`. MLM default: `all-MiniLM-L6-v2`. LLM default: `t5-small`. |
-| `semantic.compressUserMessages` | `boolean` | `true` | Kompresi pesan dari user. |
-| `semantic.compressAssistantMessages` | `boolean` | `false` | Kompresi pesan dari assistant. Tidak disarankan karena bisa menghilangkan nuance. |
-| `semantic.compressToolOutputs` | `boolean` | `true` | Kompresi output tool setelah diffilter L1. |
-| `semantic.protectCodeBlocks` | `boolean` | `true` | **JANGAN PERNAH** sentuh konten dalam triple backticks (```` ``` ````). |
-| `semantic.protectErrors` | `boolean` | `true` | Lindungi error messages dan stack traces agar tetap akurat. |
-| `semantic.minLengthChars` | `number` | `200` | Skip kompresi jika teks lebih pendek dari ini. Hemat CPU untuk pesan pendek. |
+| `semantic.enabled` | `boolean` | `true` | Enable Layer 2. |
+| `semantic.mode` | `"nlp"` / `"mlm"` / `"llm"` | `"nlp"` | Compression mode. NLP = rule-based (zero latency). MLM = AI-based embedding dedup. LLM = local summarization via `@huggingface/transformers`. |
+| `semantic.model` | `string` | `"Xenova/all-MiniLM-L6-v2"` | Model for `mlm` or `llm` mode. MLM default: `all-MiniLM-L6-v2`. LLM default: `t5-small`. |
+| `semantic.compressUserMessages` | `boolean` | `true` | Compress messages from the user. |
+| `semantic.compressAssistantMessages` | `boolean` | `false` | Compress messages from the assistant. Not recommended as it may remove nuance. |
+| `semantic.compressToolOutputs` | `boolean` | `true` | Compress tool output after L1 filtering. |
+| `semantic.protectCodeBlocks` | `boolean` | `true` | **NEVER** touch content inside triple backticks (` ``` `). |
+| `semantic.protectErrors` | `boolean` | `true` | Protect error messages and stack traces to keep them accurate. |
+| `semantic.minLengthChars` | `number` | `200` | Skip compression if text is shorter than this. Saves CPU for short messages. |
 
-### Mode NLP (Default)
+### NLP Mode (Default)
 
 ```jsonc
 {
@@ -92,13 +92,13 @@ Mengompresi teks pesan secara semantik tanpa mengubah makna. Tidak menyentuh cod
 }
 ```
 
-Grammar stripping berbasis aturan linguistik:
-- Hapus kata sambung (`yang`, `dan`, `akan`, `bahwa`)
-- Padatkan kata ganti berlebihan
-- Normalisasi whitespace
-- **Zero latency** (< 1ms per pesan)
+Grammar stripping based on linguistic rules:
+- Remove conjunctions and filler words
+- Condense redundant pronouns
+- Whitespace normalization
+- **Zero latency** (< 1ms per message)
 
-### Mode MLM (Experimental)
+### MLM Mode (Experimental)
 
 ```jsonc
 {
@@ -109,15 +109,15 @@ Grammar stripping berbasis aturan linguistik:
 }
 ```
 
-Menggunakan **Masked Language Model** via Transformers.js:
-- Download model ~70MB saat pertama kali
-- Latensi 50-200ms per pesan
-- RAM tambahan ~200MB
-- Deteksi duplikat **all-pairs** (bukan hanya adjacent), lebih akurat
-- Quantized: `dtype: "q8"` — model ~71MB (bukan 284MB full)
-- **Wajib**: `npm install -g @huggingface/transformers`
+Uses **Masked Language Model** via Transformers.js:
+- Model download ~70MB on first use
+- Latency 50-200ms per message
+- Extra RAM ~200MB
+- **All-pairs** duplicate detection (not just adjacent), more accurate
+- Quantized: `dtype: "q8"` — model ~71MB (instead of 284MB full)
+- **Required**: `npm install -g @huggingface/transformers`
 
-### Mode LLM (Experimental, Local)
+### LLM Mode (Experimental, Local)
 
 ```jsonc
 {
@@ -127,28 +127,28 @@ Menggunakan **Masked Language Model** via Transformers.js:
 }
 ```
 
-Menggunakan **summarization pipeline** via `@huggingface/transformers` (T5-small):
-- Download model ~300MB (q8) saat pertama kali
-- Latensi 1-5s per blok teks
-- Bisa kompresi 5-10x untuk teks panjang
-- **Lokal** — tidak perlu koneksi internet atau API key
-- Fallback ke NLP jika model gagal load
-- Default model: `Xenova/t5-small` (bisa diganti via `semantic.model`)
+Uses **summarization pipeline** via `@huggingface/transformers` (T5-small):
+- Model download ~300MB (q8) on first use
+- Latency 1-5s per text block
+- Can compress 5-10x for long text
+- **Local** — no internet connection or API key needed
+- Falls back to NLP if model fails to load
+- Default model: `Xenova/t5-small` (can be changed via `semantic.model`)
 
-| Model | Bahasa | Ukuran | Akurasi |
+| Model | Language | Size | Accuracy |
 | :--- | :--- | :--- | :--- |
 | `Xenova/all-MiniLM-L6-v2` | Multilingual | ~71MB (q8) | ~93% |
-| `Xenova/distilbert-base-uncased` | Inggris | ~70MB | ~95% |
-| `Xenova/bert-base-multilingual-uncased` | 100+ bahasa (incl. Indonesia) | ~170MB | ~94% |
+| `Xenova/distilbert-base-uncased` | English | ~70MB | ~95% |
+| `Xenova/bert-base-multilingual-uncased` | 100+ languages (incl. Indonesian) | ~170MB | ~94% |
 
-### Contoh Kasus
+### Example Use Case
 
 ```jsonc
 {
   "semantic": {
     "mode": "nlp",
     "compressAssistantMessages": false,
-    "minLengthChars": 500,        // hanya kompresi pesan panjang
+    "minLengthChars": 500,        // only compress long messages
     "protectCodeBlocks": true,
     "protectErrors": true
   }
@@ -159,80 +159,80 @@ Menggunakan **summarization pipeline** via `@huggingface/transformers` (T5-small
 
 ## ✂️ Layer 3 — Dynamic Context Pruning (DCP)
 
-Layer paling powerful. **Menghapus pesan lama dari context window** dan menggantinya dengan ringkasan. LLM diberi otonomi memanggil `ultrapress_compress`.
+The most powerful layer. **Removes old messages from the context window** and replaces them with summaries. The LLM is given autonomy to call `ultrapress_compress`.
 
-| Key | Tipe | Default | Deskripsi |
+| Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `summarization.enabled` | `boolean` | `true` | Aktifkan Layer 3. |
-| `summarization.mode` | `"range"` / `"message"` | `"range"` | Mode pruning: `range` (blok pesan berurutan) atau `message` (satu/beberapa ID spesifik). |
-| `summarization.maxContextLimit` | `number` | `70000` | Ambang batas **nudge**. Nudge muncul saat 70% limit tercapai (pre-emptive). |
-| `summarization.minContextLimit` | `number` | `40000` | Target token setelah pruning. LLM diarahkan untuk meringkas hingga di bawah ini. |
-| `summarization.preserveLastN` | `number` | `3` | Jangan prune N pesan **terakhir** (0 = disable). Melindungi konteks percakapan terkini. |
-| `summarization.scoreThreshold` | `number` | `0` | Multi-signal importance scoring (0-1). `0` = disable. `0.45` = rekomendasi. Pesan dengan score di atas threshold tetap dipertahankan meskipun masuk block lama. |
+| `summarization.enabled` | `boolean` | `true` | Enable Layer 3. |
+| `summarization.mode` | `"range"` / `"message"` | `"range"` | Pruning mode: `range` (sequential message block) or `message` (one/several specific IDs). |
+| `summarization.maxContextLimit` | `number` | `70000` | **Nudge** threshold. Nudge appears when 70% of limit is reached (pre-emptive). |
+| `summarization.minContextLimit` | `number` | `40000` | Token target after pruning. The LLM is directed to summarize down below this. |
+| `summarization.preserveLastN` | `number` | `3` | Do not prune the **last** N messages (0 = disable). Protects current conversation context. |
+| `summarization.scoreThreshold` | `number` | `0` | Multi-signal importance scoring (0-1). `0` = disable. `0.45` = recommended. Messages with score above threshold are preserved even if in the old block. |
 
-### Alur Kerja
+### Workflow
 
 ```
-1. Context Monitor → deteksi token > 70% maxContextLimit (pre-emptive)
-2. Nudge → sisipkan peringatan ke user prompt (setiap nudgeFrequency turn)
-3. LLM panggil → ultrapress_compress(mode="range", from="msg_X", to="msg_Y")
-4. Compression Block → disimpan di memory (belum dieksekusi)
-5. Chat berikutnya → block dieksekusi: hapus msg_X sd msg_Y, sisipkan ringkasan
-6. Original content → disimpan di plugin memory (bukan LLM context)
-7. LLM bisa panggil → ultrapress_expand(block_id=0) untuk lihat konten asli
+1. Context Monitor → detect token > 70% maxContextLimit (pre-emptive)
+2. Nudge → insert warning into user prompt (every nudgeFrequency turn)
+3. LLM calls → ultrapress_compress(mode="range", from="msg_X", to="msg_Y")
+4. Compression Block → stored in memory (not yet executed)
+5. Next chat → block executed: remove msg_X through msg_Y, insert summary
+6. Original content → stored in plugin memory (not LLM context)
+7. LLM can call → ultrapress_expand(block_id=0) to view original content
 ```
 
 ### Multi-Signal Importance Scoring
 
-Selain `preserveLastN`, tiap pesan diskor dari 5 sinyal:
-- **Recency** (30%) — pesan baru score lebih tinggi (exponential decay)
+In addition to `preserveLastN`, each message is scored from 5 signals:
+- **Recency** (30%) — newer messages get higher scores (exponential decay)
 - **Role** (25%) — user > system > assistant > tool
 - **Tool type** (20%) — `write`/`edit`/`bash` > `read`/`grep` > `todowrite`
-- **Keywords** (15%) — task words (`implement`, `fix`, `urgent`) score tinggi
-- **Content size** (10%) — 50-500 chars ideal, very short/long score rendah
+- **Keywords** (15%) — task words (`implement`, `fix`, `urgent`) score high
+- **Content size** (10%) — 50-500 chars ideal, very short/long score low
 
-Aktifkan dengan `scoreThreshold: 0.45`. Pesan dengan score ≥ threshold tetap dipertahankan meskipun sudah tua.
+Activate with `scoreThreshold: 0.45`. Messages with score ≥ threshold are preserved even if old.
 
 ### Reversible Compression
 
-`ultrapress_expand` tool — LLM bisa "mengembangkan" kembali block yang sudah diringkas untuk lihat konten asli. Konten asli disimpan di plugin memory (Node.js heap), **bukan** di context window LLM — jadi 0 token cost sampai LLM meminta expand.
+`ultrapress_expand` tool — the LLM can "expand" back a summarized block to view the original content. Original content is stored in plugin memory (Node.js heap), **not** in the LLM context window — so 0 token cost until the LLM requests an expand.
 
 ### preserveLastN
 
-Proteksi pesan terbaru agar tidak terhapus oleh pruning. Sangat penting untuk:
+Protection for recent messages from being removed by pruning. Very important for:
 
-- **Percakapan yang sedang aktif** — konteks terkini tetap utuh
-- **Instruksi yang baru diberikan** — tidak hilang sebelum dieksekusi
-- **Feedback loop** — koreksi user terbaru tetap terbaca
+- **Active conversation** — current context stays intact
+- **Newly given instructions** — not lost before execution
+- **Feedback loop** — latest user corrections remain readable
 
 ```jsonc
 {
   "summarization": {
-    "preserveLastN": 5  // lindungi 5 pesan terakhir
+    "preserveLastN": 5  // protect the last 5 messages
   }
 }
 ```
 
-> `preserveLastN: 0` = matikan proteksi. Semua pesan kecuali yang diproteksi (`task`, `write`, `edit`) bisa kena pruning.
+> `preserveLastN: 0` = disable protection. All messages except protected ones (`task`, `write`, `edit`) can be pruned.
 
 ### Protected Content
 
-Tool output berikut **otomatis diproteksi** dari pruning:
+The following tool outputs are **automatically protected** from pruning:
 
-- `task` — delegasi sub-agent
+- `task` — sub-agent delegation
 - `write` — file writing
 - `edit` — file editing
-- `bash` (hanya hasil error) — `bash` hasil sukses tetap bisa dipruning
-- `read` — file reading (hanya output yang difilter)
+- `bash` (error results only) — successful `bash` output can still be pruned
+- `read` — file reading (filtered output only)
 
-### Contoh Kasus
+### Example Use Case
 
 ```jsonc
 {
   "summarization": {
-    "maxContextLimit": 50000,     // lebih agresif — prune di 50k
-    "minContextLimit": 30000,     // nudge mulai di 30k
-    "nudgeFrequency": 3,          // nudge lebih sering
+    "maxContextLimit": 50000,     // more aggressive — prune at 50k
+    "minContextLimit": 30000,     // nudge starts at 30k
+    "nudgeFrequency": 3,          // nudge more often
     "preserveLastN": 4
   }
 }
@@ -241,9 +241,9 @@ Tool output berikut **otomatis diproteksi** dari pruning:
 ```jsonc
 {
   "summarization": {
-    "maxContextLimit": 100000,    // conservative — biarkan konteks besar
+    "maxContextLimit": 100000,    // conservative — allow large context
     "minContextLimit": 60000,
-    "nudgeFrequency": 8,          // jarang nudge
+    "nudgeFrequency": 8,          // nudge rarely
     "preserveLastN": 6
   }
 }
@@ -253,31 +253,39 @@ Tool output berikut **otomatis diproteksi** dari pruning:
 
 ## 🧹 Layer 4 — Auto Cleanup
 
-Membersihkan "sampah" dari context window secara otomatis.
+Cleans up "junk" from the context window automatically.
 
-| Key | Tipe | Default | Deskripsi |
+| Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `cleanup.deduplication.enabled` | `boolean` | `true` | Cegah tool call identik berulang (tool + args sama). |
-| `cleanup.purgeErrors.enabled` | `boolean` | `true` | Hapus pesan error otomatis setelah N turn. |
-| `cleanup.purgeErrors.turns` | `number` | `4` | Jumlah turn sebelum error dihapus. |
+| `cleanup.deduplication.enabled` | `boolean` | `true` | Prevent identical repeated tool calls (same tool + args). |
+| `cleanup.purgeErrors.enabled` | `boolean` | `true` | Delete error messages automatically after N turns. |
+| `cleanup.purgeErrors.turns` | `number` | `4` | Number of turns before an error is removed. |
 
 ### Deduplication
 
-Tool call yang sama dengan argumen identik → output kedua diganti dengan referensi singkat:
+Identical tool calls with identical arguments → second output replaced with a short reference:
 
 ```
-[Duplicate output. Identical to previous call #abc123]
-Summary: <100 karakter pertama dari output asli>
+[Duplicate output. See above ↑]
 ```
 
-**Tool yang didedup**: `bash`, `read_file`, `list_dir`, `grep_search`, `shell`, `run_command`
+- Preserves first call output, references it
+- Avoids re-executing identical read/write patterns
+- Built-in smart detection for stateful commands (avoids false positives)
 
-**Pengecualian** (tidak di-dedup meskipun identik):
-- `bash` perintah yang mengubah state: `git commit`, `git push`, `npm install`, `cargo build`, `rm`, `touch`
+### Error Auto-Purge
 
-### Error Purging
+Error messages more than N turns old are automatically removed from context:
 
-Error yang sudah basi (lebih dari N turn) otomatis dihapus dari context. Mencegah error lama memenuhi context window.
+```
+[Error purged after 4 turns: <message id>]
+```
+
+- Cleans up deprecated errors from old code versions
+- Prevents repeated stack traces from consuming window space
+- Error contexts already completed by the agent don't need to persist
+
+### Example Use Case
 
 ```jsonc
 {
@@ -285,7 +293,7 @@ Error yang sudah basi (lebih dari N turn) otomatis dihapus dari context. Mencega
     "deduplication": { "enabled": true },
     "purgeErrors": {
       "enabled": true,
-      "turns": 3       // hapus error setelah 3 turn (lebih agresif)
+      "turns": 3  // remove errors after 3 turns
     }
   }
 }
@@ -293,196 +301,383 @@ Error yang sudah basi (lebih dari N turn) otomatis dihapus dari context. Mencega
 
 ---
 
-## 🔧 Custom Filters
+## Custom Filters
 
-Tambahkan filter kustom untuk tool CLI yang tidak tercover oleh filter bawaan.
+In addition to built-in domain filters, you can register custom processing for specific CLI tools. Powered by the `CustomFilter` API.
 
 ```jsonc
 {
   "outputFilter": {
     "customFilters": [
       {
-        "commandPattern": "kubectl|helm",
-        "stripPatterns": [
-          "^\\s*$",                       // baris kosong
-          "^(NAME|AGE|STATUS|READY)\\s",  // header tabel
-          "^\\|──",                       // tree chars
-          "^\\s*ok$"                      // status ok
-        ],
-        "keepPatterns": [
-          "Error",                        // selalu pertahankan error
-          "Failed",
-          "CrashLoopBackOff",
-          "ImagePullBackOff"
-        ],
-        "maxLines": 200
+        "name": "kubectl-pod-status",
+        "matchers": [{ "type": "commandContains", "value": "kubectl get pods" }],
+        "process": {
+          "type": "keepLinesContaining",
+          "args": ["STATUS", "READY", "RESTARTS", "NAME"]
+        }
       }
     ]
   }
 }
 ```
 
-| Field | Tipe | Deskripsi |
+### CustomFilter API
+
+| Field | Type | Description |
 | :--- | :--- | :--- |
-| `commandPattern` | `string` (regex) | Pola nama command yang difilter. `kubectl|helm` = filter semua command mengandung kata kubectl atau helm. |
-| `stripPatterns` | `string[]` (regex) | Baris yang **match** pola ini → dihapus. |
-| `keepPatterns` | `string[]` (regex) | Baris yang **match** pola ini → **selalu** dipertahankan (override stripPatterns). |
-| `maxLines` | `number` | Batas maksimum baris output (middle-out truncation). |
+| `name` | `string` | Unique filter identifier. |
+| `matchers` | `Matcher[]` | How to identify this tool call. One or more conditions. |
+| `process` | `Process` | What to do with the output. |
 
-### Contoh Filter per Stack
+### Matcher Types
 
-<details>
-<summary><b>Kubernetes / Docker</b></summary>
+| Type | Field | Example |
+| :--- | :--- | :--- |
+| `commandContains` | Command contains substring | `"grep"`, `"npx"`, `"kubectl"` |
+| `commandRegex` | Command matches regex | `"^git\\s+(diff|log)"` |
+| `outputContains` | Output contains text | `"error"`, `"FAILED"` |
+| `outputRegex` | Output matches regex | `"^\\d+\\s+tests?\\s+failed"` |
 
-```json
+### Process Types
+
+| Type | Description | args |
+| :--- | :--- | :--- |
+| `keepLinesContaining` | Keep only lines containing keywords | `["ERROR", "WARN"]` |
+| `removeLinesContaining` | Remove lines containing keywords | `["DEBUG", "INFO"]` |
+| `keepLinesMatching` | Keep only lines matching regex | `["^\\[ERROR\\]"]` |
+| `removeLinesMatching` | Remove lines matching regex | `["^\\s*$"]` (empty lines) |
+| `truncateAfterLine` | Truncate from line N onward | `[100]` |
+| `grep` | Keep only lines matching pattern | `["^\\d+\\s+tests?\\s+failed"]` |
+| `replace` | Replace pattern with text | `["\\x1b\\[[0-9;]*m", ""]` (strip ANSI) |
+
+### Custom Filter Example — pytest
+
+```jsonc
 {
-  "commandPattern": "kubectl|docker|helm",
-  "stripPatterns": ["^\\s*$", "^(NAME|AGE|STATUS|IMAGE)\\s"],
-  "keepPatterns": ["Error|Failed|CrashLoop|BackOff"],
-  "maxLines": 150
-}
-```
-</details>
-
-<details>
-<summary><b>Build Tools (Webpack, Vite, Turbopack)</b></summary>
-
-```json
-{
-  "commandPattern": "webpack|vite|turbo",
-  "stripPatterns": ["√|✓|ℹ", "^(cache|sync)", "^\\(symbol"],
-  "keepPatterns": ["ERROR|WARNING|FAILED"],
-  "maxLines": 100
-}
-```
-</details>
-
-<details>
-<summary><b>Database (psql, mysql, mongo)</b></summary>
-
-```json
-{
-  "commandPattern": "psql|mysql|mongosh",
-  "stripPatterns": ["^-\\(.*rows?\\)", "^\\s*\\|", "^\\(\\d+ rows?\\)"],
-  "keepPatterns": ["ERROR|FATAL|syntax error|constraint"],
-  "maxLines": 300
-}
-```
-</details>
-
----
-
-## 🎯 Preset Konfigurasi
-
-<details>
-<summary><b>🔋 Hemat Maksimal</b> — Session panjang / banyak tool output</summary>
-
-```json
-{
-  "notification": "minimal",
-  "outputFilter": {
-    "maxCharsPerOutput": 4000,
-    "teeSaveOnTruncate": true
-  },
-  "semantic": {
-    "mode": "nlp",
-    "minLengthChars": 150,
-    "compressUserMessages": true,
-    "compressToolOutputs": true
-  },
-  "summarization": {
-    "maxContextLimit": 50000,
-    "minContextLimit": 25000,
-    "nudgeFrequency": 3,
-    "preserveLastN": 2,
-    "showCompression": false
-  },
-  "cleanup": {
-    "deduplication": { "enabled": true },
-    "purgeErrors": { "enabled": true, "turns": 3 }
+  "name": "pytest-summary",
+  "matchers": [
+    { "type": "commandContains", "value": "pytest" }
+  ],
+  "process": {
+    "type": "keepLinesContaining",
+    "args": ["PASSED", "FAILED", "ERROR", "passed", "failed", "error", "test session"]
   }
 }
 ```
-</details>
 
-<details>
-<summary><b>🧠 Preservasi Maksimal</b> — Session coding intensif</summary>
+Result:
+```
+=== test session starts ===
+tests/test_auth.py .....PASSED
+tests/test_api.py ..FF..FAILED
+tests/test_db.py ......ERROR
+```
 
-```json
+---
+
+## Configuration Environment Variables
+
+You can also override configuration via environment variables (highest priority):
+
+| Variable | Config Key | Example |
+| :--- | :--- | :--- |
+| `ULTRAPRESS_ENABLED` | `enabled` | `"false"` |
+| `ULTRAPRESS_NOTIFICATION` | `notification` | `"off"` |
+| `ULTRAPRESS_OUTPUT_MAX_CHARS` | `outputFilter.maxCharsPerOutput` | `"4000"` |
+| `ULTRAPRESS_SEMANTIC_MODE` | `semantic.mode` | `"nlp"` |
+| `ULTRAPRESS_SEMANTIC_MODEL` | `semantic.model` | `"Xenova/all-MiniLM-L6-v2"` |
+| `ULTRAPRESS_SUMMARIZATION_ENABLED` | `summarization.enabled` | `"true"` |
+| `ULTRAPRESS_MAX_CONTEXT` | `summarization.maxContextLimit` | `"50000"` |
+| `ULTRAPRESS_PRESERVE_LAST_N` | `summarization.preserveLastN` | `"5"` |
+| `ULTRAPRESS_PURGE_ERRORS` | `cleanup.purgeErrors.enabled` | `"true"` |
+| `ULTRAPRESS_PURGE_TURNS` | `cleanup.purgeErrors.turns` | `"3"` |
+
+---
+
+## `/up` Slash Commands
+
+UltraPress adds several `/up` commands to OpenCode for runtime control:
+
+| Command | Function |
+| :--- | :--- |
+| `/up status` | Display current token count, compression savings, active filters |
+| `/up pause` | Pause UltraPress (temporarily disable all layers) |
+| `/up resume` | Resume UltraPress after pause |
+| `/up expand` | Expand the last compressed block |
+| `/up compress` | Manually trigger compression on the current session |
+| `/up config` | Show current configuration (sanitized) |
+| `/up prune` | Manually trigger message pruning |
+
+---
+
+## Complete Example Configurations
+
+### Configuration A — Aggressive (Max Savings)
+
+For very long sessions (200+ messages), long CLI output.
+
+```jsonc
 {
-  "notification": "detailed",
+  "enabled": true,
+  "notification": "minimal",
+  "autoUpdate": true,
+
   "outputFilter": {
-    "maxCharsPerOutput": 12000,
-    "teeSaveOnTruncate": true
+    "enabled": true,
+    "maxCharsPerOutput": 3000,
+    "teeSaveOnTruncate": true,
+    "customFilters": []
   },
+
   "semantic": {
-    "mode": "nlp",
+    "enabled": true,
+    "mode": "mlm",
+    "model": "Xenova/all-MiniLM-L6-v2",
+    "compressUserMessages": true,
     "compressAssistantMessages": false,
-    "minLengthChars": 500,
-    "protectCodeBlocks": true
+    "compressToolOutputs": true,
+    "protectCodeBlocks": true,
+    "protectErrors": true,
+    "minLengthChars": 150
   },
+
   "summarization": {
-    "maxContextLimit": 100000,
+    "enabled": true,
+    "mode": "range",
+    "maxContextLimit": 40000,
+    "minContextLimit": 20000,
+    "nudgeFrequency": 3,
+    "summaryBuffer": false,
+    "showCompression": true,
+    "preserveLastN": 3,
+    "scoreThreshold": 0.40
+  },
+
+  "cleanup": {
+    "deduplication": { "enabled": true },
+    "purgeErrors": {
+      "enabled": true,
+      "turns": 3
+    }
+  }
+}
+```
+
+### Configuration B — Conservative (Minimal Interruption)
+
+For short, focused sessions. Maximum protection for important messages.
+
+```jsonc
+{
+  "enabled": true,
+  "notification": "detailed",
+  "autoUpdate": true,
+
+  "outputFilter": {
+    "enabled": true,
+    "maxCharsPerOutput": 12000,
+    "teeSaveOnTruncate": false,
+    "customFilters": []
+  },
+
+  "semantic": {
+    "enabled": true,
+    "mode": "nlp",
+    "compressUserMessages": false,
+    "compressAssistantMessages": false,
+    "compressToolOutputs": true,
+    "protectCodeBlocks": true,
+    "protectErrors": true,
+    "minLengthChars": 500
+  },
+
+  "summarization": {
+    "enabled": true,
+    "mode": "range",
+    "maxContextLimit": 90000,
     "minContextLimit": 60000,
     "nudgeFrequency": 8,
+    "summaryBuffer": false,
+    "showCompression": true,
     "preserveLastN": 6,
-    "showCompression": true
+    "scoreThreshold": 0
   },
+
   "cleanup": {
     "deduplication": { "enabled": true },
-    "purgeErrors": { "enabled": false }
+    "purgeErrors": {
+      "enabled": true,
+      "turns": 6
+    }
   }
 }
 ```
-</details>
 
-<details>
-<summary><b>🔇 Silent Mode</b> — Tidak ada notifikasi sama sekali</summary>
+### Configuration C — NLP-Only (Zero Latency)
 
-```json
+No ML models. No downloads. Works offline.
+
+```jsonc
 {
-  "notification": "off",
-  "semantic": { "minLengthChars": 999999 },
-  "summarization": {
-    "showCompression": false,
-    "maxContextLimit": 200000,
-    "minContextLimit": 150000
-  }
-}
-```
-</details>
+  "enabled": true,
+  "notification": "minimal",
+  "autoUpdate": false,
 
-<details>
-<summary><b>🧪 MLM Mode</b> — Gunakan AI untuk kompresi semantik</summary>
+  "outputFilter": {
+    "enabled": true,
+    "maxCharsPerOutput": 6000,
+    "teeSaveOnTruncate": false,
+    "customFilters": []
+  },
 
-```json
-{
   "semantic": {
-    "mode": "mlm",
-    "model": "Xenova/bert-base-multilingual-uncased",
-    "minLengthChars": 300,
+    "enabled": true,
+    "mode": "nlp",
+    "compressUserMessages": true,
+    "compressAssistantMessages": false,
+    "compressToolOutputs": true,
     "protectCodeBlocks": true,
-    "protectErrors": true
+    "protectErrors": true,
+    "minLengthChars": 250
+  },
+
+  "summarization": {
+    "enabled": true,
+    "mode": "range",
+    "maxContextLimit": 60000,
+    "minContextLimit": 35000,
+    "nudgeFrequency": 5,
+    "summaryBuffer": false,
+    "showCompression": true,
+    "preserveLastN": 4,
+    "scoreThreshold": 0
+  },
+
+  "cleanup": {
+    "deduplication": { "enabled": true },
+    "purgeErrors": {
+      "enabled": true,
+      "turns": 4
+    }
   }
 }
 ```
-
-> ⚠️ Wajib install: `npm install -g @huggingface/transformers`
-> ⚠️ Model didownload otomatis (~170MB untuk multilingual)
-</details>
 
 ---
 
-## 📦 Skema TypeScript (Type Definitions)
+## JSON Schema
 
-Untuk referensi tipe yang lebih detail, lihat [`src/config/schema.ts`](../src/config/schema.ts):
+The `ultrapress.schema.json` file validates configuration:
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "enabled": { "type": "boolean", "default": true },
+    "notification": {
+      "type": "string",
+      "enum": ["off", "minimal", "detailed"],
+      "default": "minimal"
+    },
+    "autoUpdate": { "type": "boolean", "default": true },
+    "outputFilter": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "maxCharsPerOutput": { "type": "number", "default": 8000, "minimum": 100 },
+        "teeSaveOnTruncate": { "type": "boolean", "default": true },
+        "customFilters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "matchers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": { "type": "string" },
+                    "value": { "type": "string" }
+                  },
+                  "required": ["type", "value"]
+                }
+              },
+              "process": {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string" },
+                  "args": { "type": "array", "items": { "type": "string" } }
+                },
+                "required": ["type", "args"]
+              }
+            },
+            "required": ["name", "matchers", "process"]
+          }
+        }
+      }
+    },
+    "semantic": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "mode": { "type": "string", "enum": ["nlp", "mlm", "llm"], "default": "nlp" },
+        "model": { "type": "string" },
+        "compressUserMessages": { "type": "boolean", "default": true },
+        "compressAssistantMessages": { "type": "boolean", "default": false },
+        "compressToolOutputs": { "type": "boolean", "default": true },
+        "protectCodeBlocks": { "type": "boolean", "default": true },
+        "protectErrors": { "type": "boolean", "default": true },
+        "minLengthChars": { "type": "number", "default": 200, "minimum": 0 }
+      }
+    },
+    "summarization": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "mode": { "type": "string", "enum": ["range", "message"], "default": "range" },
+        "maxContextLimit": { "type": "number", "default": 70000 },
+        "minContextLimit": { "type": "number", "default": 40000 },
+        "nudgeFrequency": { "type": "number", "default": 5 },
+        "summaryBuffer": { "type": "boolean", "default": false },
+        "showCompression": { "type": "boolean", "default": true },
+        "preserveLastN": { "type": "number", "default": 3, "minimum": 0 },
+        "scoreThreshold": { "type": "number", "default": 0, "minimum": 0, "maximum": 1 }
+      }
+    },
+    "cleanup": {
+      "type": "object",
+      "properties": {
+        "deduplication": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean", "default": true }
+          }
+        },
+        "purgeErrors": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean", "default": true },
+            "turns": { "type": "number", "default": 4, "minimum": 1 }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+---
+
+## TypeScript Interface Reference
 
 ```typescript
 interface UltraPressConfig {
   enabled: boolean
-  autoUpdate: boolean
   notification: "off" | "minimal" | "detailed"
-
+  autoUpdate: boolean
   outputFilter: OutputFilterConfig
   semantic: SemanticConfig
   summarization: SummarizationConfig
@@ -528,17 +723,17 @@ interface CleanupConfig {
 
 ---
 
-## ❓ Troubleshooting Konfigurasi
+## ❓ Configuration Troubleshooting
 
-| Problem | Penyebab | Solusi |
+| Problem | Cause | Solution |
 | :--- | :--- | :--- |
-| Plugin tidak aktif | `enabled: false` | Set `"enabled": true` |
-| Pesan penting terhapus | `preserveLastN` terlalu kecil | Naikkan ke 5-7 |
-| OpenCode lambat | Mode `mlm` + model besar | Switch ke `"mode": "nlp"` |
-| Notifikasi terlalu banyak | `notification: "detailed"` | Set ke `"minimal"` atau `"off"` |
-| Error tidak kunjung hilang | `purgeErrors.turns` terlalu besar | Turunkan ke 2-3 |
-| Semua tool call di-dedup | Perintah stateful ikut kena dedup | Built-in sudah handle ini. Jika ada yang terlewat, laporkan. |
+| Plugin not active | `enabled: false` | Set `"enabled": true` |
+| Important messages deleted | `preserveLastN` too small | Increase to 5-7 |
+| OpenCode slow | `mlm` mode + large model | Switch to `"mode": "nlp"` |
+| Too many notifications | `notification: "detailed"` | Set to `"minimal"` or `"off"` |
+| Errors never disappear | `purgeErrors.turns` too large | Lower to 2-3 |
+| All tool calls dedup'd | Stateful commands also get dedup'd | Built-in already handles this. If any are missed, report. |
 
 ---
 
-> 💡 **Best Practice**: Mulai dengan default, lalu adjust berdasarkan pola penggunaan. Untuk session panjang (>100 pesan), turunkan `maxContextLimit` dan naikkan `preserveLastN`.
+> 💡 **Best Practice**: Start with defaults, then adjust based on usage patterns. For long sessions (>100 messages), lower `maxContextLimit` and increase `preserveLastN`.
