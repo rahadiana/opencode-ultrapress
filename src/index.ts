@@ -234,10 +234,15 @@ export async function server(ctx: any): Promise<Hooks> {
               }
            }
 
-           // Layer 2 + 3: Semantic Compression & DCP Nudge
-           // Content lives in output.parts (TextPart.text) not output.message.content
-           const textPartIndex = (output.parts || []).findIndex((p: any) => p.type === "text")
-           const msgContent: string | null = textPartIndex >= 0 ? output.parts[textPartIndex].text : null
+            // Layer 2 + 3: Semantic Compression & DCP Nudge
+            // Content lives in output.parts (TextPart.text) not output.message.content
+            const textPartIndex = (output.parts || []).findIndex((p: any) => p.type === "text")
+            const msgContent: string | null = textPartIndex >= 0 ? output.parts[textPartIndex].text : null
+
+            // Track raw tokens for all chat messages
+            if (msgContent) {
+               stats.totalTokensRaw += estimateTokens(msgContent)
+            }
 
             // Only process if there's text content from the current turn
             if (msgContent && config.semantic.enabled) {
@@ -250,21 +255,23 @@ export async function server(ctx: any): Promise<Hooks> {
                 }, toolName)
               stats.savedByLayer.semantic += estimateTokens(msgContent) - estimateTokens(content)
 
-              // ─── L3: DCP Nudge ──────────────────────────────────
-              if (config.summarization.enabled && stats.compressionCount > 0) {
-                 // Inject nudge instruction into the user prompt
-                 // This tells the LLM to summarize older context since it's being pruned
-                 output.parts[textPartIndex].text = content + `\n\n[Context note: Older messages have been compressed. Focus on recent ${config.summarization.preserveLastN} messages.]`
-                 logger.info("[L3] Injected compressed nudge into user prompt.")
-              }
+               // ─── L3: DCP Nudge ──────────────────────────────────
+               let nudgeInjected = false
+               if (config.summarization.enabled && stats.compressionCount > 0) {
+                  // Inject nudge instruction into the user prompt
+                  // This tells the LLM to summarize older context since it's being pruned
+                  output.parts[textPartIndex].text = content + `\n\n[Context note: Older messages have been compressed. Focus on recent ${config.summarization.preserveLastN} messages.]`
+                  nudgeInjected = true
+                  logger.info("[L3] Injected compressed nudge into user prompt.")
+               }
 
-              // Track compressed tokens
-              stats.totalTokensCompressed += estimateTokens(content)
+               // Track compressed tokens
+               stats.totalTokensCompressed += estimateTokens(content)
 
-              // Write compressed content back to the text part
-              if (content !== msgContent) {
-                 output.parts[textPartIndex].text = content
-              }
+               // Write compressed content back to the text part (only if nudge wasn't already set)
+               if (content !== msgContent && !nudgeInjected) {
+                  output.parts[textPartIndex].text = content
+               }
            }
         } catch (err) {
            logger.error(`[Hook] chat.message failed: ${err}`)
