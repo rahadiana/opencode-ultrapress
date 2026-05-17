@@ -239,6 +239,9 @@ Sistem paling canggih: **memberi otonomi kepada LLM untuk mengelola memorinya se
 | **Protected Content** | Tool output penting (`task`, `write`, `edit`, `bash` hasil sukses, `read`) dilindungi dari pruning. Hanya `read` output yang difilter. Lihat `protected-content.ts`. |
 | **Nesting Support** | Kompresi bisa dilakukan di atas kompresi sebelumnya. Ringkasan bertingkat digabung otomatis. |
 | **`preserveLastN`** | Melindungi N pesan **terakhir** dari pruning — menjaga konteks percakapan terkini tetap utuh. Default: `3`. Set ke `0` untuk disable. |
+| **Multi-Signal Scoring** | Selain `preserveLastN`, tiap pesan diskor dari 5 sinyal (recency, role, tool type, keyword, content size). Pesan dengan score tinggi tetap dipertahankan meskipun masuk block lama. Default: off (`scoreThreshold: 0`), rekomendasi: `0.45`. |
+| **Reversible Compression** | `ultrapress_expand` tool — LLM bisa "mengembangkan" kembali block yang sudah diringkas untuk lihat konten asli. Konten asli disimpan di plugin memory (bukan di context LLM). |
+| **Nudge @70%** | Nudge dikirim saat context mencapai 70% limit (bukan 100%), memberi LLM waktu untuk kompresi sebelum context benar-benar penuh. |
 | **summaryBuffer** | Setelah pruning, memberi ruang napas (tidak langsung trigger nudge lagi). |
 
 **Dua Mode Pruning:**
@@ -393,12 +396,13 @@ Menggunakan **Masked Language Model** via `@huggingface/transformers` (Transform
 
 | Aspek | NLP | MLM | LLM |
 | :--- | :--- | :--- | :--- |
-| **Latensi** | < 1ms | 50-200ms | Tergantung API |
-| **RAM** | 0 MB | ~200 MB | 0 MB |
+| **Latensi** | < 1ms | 50-200ms | 1-5s |
+| **RAM** | 0 MB | ~70 MB (q8) | ~300 MB (q8) |
 | **Akurasi** | ~85% | ~95% | ~99% |
 | **Bahasa** | Indonesia + Inggris | 100+ bahasa | Semua |
-| **Koneksi Internet** | ❌ Tidak perlu | ❌ Hanya download awal | ✅ Perlu |
-| **Stabil** | ✅ | ⚠️ Experimental | 🚧 Coming Soon |
+| **Koneksi Internet** | ❌ Tidak perlu | ❌ Hanya download awal | ❌ Hanya download awal |
+| **Stabil** | ✅ | ⚠️ Experimental | ⚠️ Experimental |
+| **Model** | — | `all-MiniLM-L6-v2` | `t5-small` (summarization) |
 
 ---
 
@@ -680,12 +684,17 @@ npm run lint    # tsc --noEmit untuk cek type error
 | Layer 1: Domain-aware output filtering | ✅ Done | v0.1.0 |
 | Layer 2: NLP semantic compression | ✅ Done | v0.1.0 |
 | Layer 2: MLM mode | ⚠️ Experimental | v0.2.0 |
-| Layer 2: LLM mode | 🚧 Planned | v0.3.0 |
+| Layer 2: LLM mode (local summarization) | ✅ Done | v0.2.0 |
+| Layer 2: All-pairs MLM dedup | ✅ Done | v0.2.0 |
 | Layer 3: Block-based DCP pruning | ✅ Done | v0.1.0 |
 | Layer 3: `preserveLastN` protection | ✅ Done | v0.1.0 |
+| Layer 3: Multi-signal importance scoring | ✅ Done | v0.2.0 |
+| Layer 3: Reversible compression (`ultrapress_expand`) | ✅ Done | v0.2.0 |
+| Layer 3: Pre-emptive nudge @70% | ✅ Done | v0.2.0 |
 | Layer 3: Surgical message pruning | ✅ Done | v0.1.0 |
 | Layer 4: Error purging & dedup | ✅ Done | v0.1.0 |
 | `/up` slash commands | ✅ Done | v0.1.0 |
+| Real token tracking (OpenCode API) | ✅ Done | v0.2.0 |
 | Custom filter API | ✅ Done | v0.1.0 |
 | TF-IDF scoring (MLM improvement) | 🚧 Planned | v0.2.0 |
 | Sentence similarity (MLM improvement) | 🚧 Planned | v0.2.0 |
