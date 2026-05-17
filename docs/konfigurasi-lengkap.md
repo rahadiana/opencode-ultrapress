@@ -114,7 +114,7 @@ Menggunakan **Masked Language Model** via Transformers.js:
 - Latensi 50-200ms per pesan
 - RAM tambahan ~200MB
 - Deteksi duplikat semantik (cosine similarity antar kalimat)
-- **Wajib**: `npm install -g @xenova/transformers`
+- **Wajib**: `npm install -g @huggingface/transformers`
 
 | Model | Bahasa | Ukuran | Akurasi |
 | :--- | :--- | :--- | :--- |
@@ -433,7 +433,7 @@ Tambahkan filter kustom untuk tool CLI yang tidak tercover oleh filter bawaan.
 }
 ```
 
-> ⚠️ Wajib install: `npm install -g @xenova/transformers`
+> ⚠️ Wajib install: `npm install -g @huggingface/transformers`
 > ⚠️ Model didownload otomatis (~170MB untuk multilingual)
 </details>
 

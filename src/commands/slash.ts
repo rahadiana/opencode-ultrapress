@@ -65,11 +65,20 @@ L4 Cleanup : ✅ ON`
 
   const overallPct = totalTokensRaw > 0 ? Math.round((totalSaved / totalTokensRaw) * 100) : 0
 
+  const realTokensLine = stats.actualTokensInput > 0
+     ? `\nReal LLM Tokens (from API):
+  Input     : ${formatTokens(stats.actualTokensInput)}
+  Output    : ${formatTokens(stats.actualTokensOutput)}
+  Reasoning : ${formatTokens(stats.actualTokensReasoning)}
+  Total Cost: ${formatTokens(stats.actualTokensInput + stats.actualTokensOutput + stats.actualTokensReasoning)}
+`
+     : `\nReal LLM Tokens: Waiting for first LLM response...`
+
   return `🔥 UltraPress Session Stats
 ───────────────────────────────────
 Total Original   : ${formatTokens(totalTokensRaw)}
 Total Compressed : ${formatTokens(totalTokensCompressed)}
-Overall Savings  : ${formatTokens(totalSaved)} (−${overallPct}%)
+Overall Savings  : ${formatTokens(totalSaved)} (−${overallPct}%)${realTokensLine}
 
 Breakdown by layer:
   L1 Filter  : saved ${formatTokens(savedByLayer.outputFilter)}
@@ -87,12 +96,15 @@ function buildContextResponse(stats: SessionStats, config: UltraPressConfig): st
    const uptime = Math.round((Date.now() - stats.startTime) / 1000)
    const minutes = Math.floor(uptime / 60)
    const seconds = uptime % 60
+   const realLine = stats.actualTokensInput > 0
+      ? `\nReal Context  : ${stats.actualTokensInput.toLocaleString()} input + ${stats.actualTokensOutput.toLocaleString()} output tokens`
+      : ""
    return `📐 UltraPress Context Info
 ───────────────────────────────────
 Context Limit  : ${config.summarization.maxContextLimit.toLocaleString()} tokens
 Target After   : ${config.summarization.minContextLimit.toLocaleString()} tokens
 Nudge Every    : ${config.summarization.nudgeFrequency} turns
-Session Uptime : ${minutes}m ${seconds}s
+Session Uptime : ${minutes}m ${seconds}s${realLine}
 
 Type '/up compress' to force summarization now.
 Type '/up stats' to see savings breakdown.`

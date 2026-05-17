@@ -28,6 +28,12 @@ export function info(msg: string, ...args: unknown[]): void {
   console.log(`${PREFIX} ${msg}`, ...args)
 }
 
+/** Warnings — shown in minimal+ mode with yellow highlight */
+export function warn(msg: string, ...args: unknown[]): void {
+  if (_level === "off") return
+  console.warn(`${PREFIX} \x1b[33m⚠\x1b[0m ${msg}`, ...args)
+}
+
 /** Shown only in detailed mode */
 export function debug(msg: string, ...args: unknown[]): void {
   if (_level !== "detailed") return

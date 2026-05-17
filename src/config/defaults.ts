@@ -64,6 +64,9 @@ export function createSessionStats(): SessionStats {
     deduplicationCount: 0,
     errorPurgeCount: 0,
     startTime: Date.now(),
+    actualTokensInput: 0,
+    actualTokensOutput: 0,
+    actualTokensReasoning: 0,
   }
 }
 

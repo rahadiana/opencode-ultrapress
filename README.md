@@ -67,7 +67,7 @@
 | **OpenCode AI** | Latest | Menggunakan `@opencode-ai/plugin ^1.14` |
 | **Git** | Any | Diperlukan untuk install dari GitHub |
 | **Bun** | Latest | Hanya untuk development/testing |
-| **@xenova/transformers** | Auto-install | Hanya digunakan jika mode `mlm` aktif |
+| **@huggingface/transformers** | Auto-install | Hanya digunakan jika mode `mlm` aktif |
 
 ### 1. Install Plugin
 
@@ -369,7 +369,7 @@ Grammar stripping berbasis aturan linguistik. **Zero latency**, tidak memerlukan
 
 ### Mode MLM (Experimental)
 
-Menggunakan **Masked Language Model** via `@xenova/transformers` (Transformers.js) untuk tokenisasi yang lebih akurat.
+Menggunakan **Masked Language Model** via `@huggingface/transformers` (Transformers.js) untuk tokenisasi yang lebih akurat.
 
 **Aktivasi:**
 
@@ -624,11 +624,11 @@ npm run benchmark      # tsx benchmarks/run.ts
 </details>
 
 <details>
-<summary><b>Error "Cannot find module @xenova/transformers"</b></summary>
+<summary><b>Error "Cannot find module @huggingface/transformers"</b></summary>
 
 Mode MLM memerlukan dependency tambahan. Install manual:
 ```bash
-npm install -g @xenova/transformers
+npm install -g @huggingface/transformers
 ```
 Atau switch ke mode `"nlp"` yang tidak memerlukan dependency eksternal.
 </details>

@@ -117,6 +117,12 @@ export interface SessionStats {
   errorPurgeCount: number
   /** Session start time */
   startTime: number
+  /** Real LLM input tokens (from AssistantMessage.tokens.input, aggregated) */
+  actualTokensInput: number
+  /** Real LLM output tokens (from AssistantMessage.tokens.output, aggregated) */
+  actualTokensOutput: number
+  /** Real LLM reasoning tokens (from AssistantMessage.tokens.reasoning, aggregated) */
+  actualTokensReasoning: number
 }
 
 // ─── Filter Result ─────────────────────────────────────────
