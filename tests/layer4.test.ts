@@ -1,8 +1,20 @@
 import { expect, test, describe, beforeEach } from "bun:test"
 import type { CleanupConfig, SessionStats } from "../src/config/schema"
 import { applyCleanup, handleTurnTick } from "../src/layers/layer4-cleanup"
-import { deduplicateToolOutput, clearDedupCache, hashToolCall } from "../src/cleanup/dedup"
-import { registerToolResult, incrementTurnAndGetPurgeable } from "../src/cleanup/purge-errors"
+import {
+  deduplicateToolOutput,
+  clearDedupCache,
+  hashToolCall,
+  getDedupCacheSize,
+  DEDUP_CACHE_MAX_ENTRIES,
+} from "../src/cleanup/dedup"
+import {
+  registerToolResult,
+  incrementTurnAndGetPurgeable,
+  resetErrorHistory,
+  getErrorHistorySize,
+  ERROR_HISTORY_MAX_ENTRIES,
+} from "../src/cleanup/purge-errors"
 
 function makeConfig(overrides: Partial<CleanupConfig> = {}): CleanupConfig {
   return {
@@ -21,6 +33,9 @@ function makeStats(): SessionStats {
     deduplicationCount: 0,
     errorPurgeCount: 0,
     startTime: Date.now(),
+    actualTokensInput: 0,
+    actualTokensOutput: 0,
+    actualTokensReasoning: 0,
   }
 }
 
@@ -31,6 +46,7 @@ function makeStats(): SessionStats {
 describe("L4 — Dedup", () => {
   beforeEach(() => {
     clearDedupCache()
+    resetErrorHistory()
   })
 
   test("hashToolCall: deterministic for same tool+args", () => {
@@ -82,6 +98,25 @@ describe("L4 — Dedup", () => {
     const res = deduplicateToolOutput("bash", { command: "npm test" }, "test output", "msg_003")
     expect(res.isDuplicate).toBe(true)
   })
+
+  test("dedup cache is bounded and evicts oldest entries", () => {
+    const firstArgs = { command: "npm test -- first" }
+    deduplicateToolOutput("bash", firstArgs, "first output", "msg_first")
+
+    for (let i = 0; i <= DEDUP_CACHE_MAX_ENTRIES; i++) {
+      deduplicateToolOutput(
+        "bash",
+        { command: `npm test -- unique-${i}` },
+        `output-${i}`,
+        `msg_${i}`,
+      )
+    }
+
+    expect(getDedupCacheSize()).toBeLessThanOrEqual(DEDUP_CACHE_MAX_ENTRIES)
+
+    const afterEviction = deduplicateToolOutput("bash", firstArgs, "first output", "msg_after")
+    expect(afterEviction.isDuplicate).toBe(false)
+  })
 })
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -89,6 +124,11 @@ describe("L4 — Dedup", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("L4 — Error Purging", () => {
+  beforeEach(() => {
+    resetErrorHistory()
+    clearDedupCache()
+  })
+
   test("registerToolResult stores error state", () => {
     const purged = incrementTurnAndGetPurgeable(4)
     expect(purged).toEqual([]) // fresh state
@@ -116,6 +156,25 @@ describe("L4 — Error Purging", () => {
     // Should NOT purge non-errors
     const results = incrementTurnAndGetPurgeable(4)
     expect(results).not.toContain("non_err_001")
+  })
+
+  test("non-error messages are evicted after retention window", () => {
+    registerToolResult("non_err_001", false)
+    expect(getErrorHistorySize()).toBe(1)
+
+    for (let i = 0; i < 8; i++) {
+      incrementTurnAndGetPurgeable(4)
+    }
+
+    expect(getErrorHistorySize()).toBe(0)
+  })
+
+  test("error history is bounded by max entries", () => {
+    for (let i = 0; i <= ERROR_HISTORY_MAX_ENTRIES; i++) {
+      registerToolResult(`msg_${i}`, false)
+    }
+
+    expect(getErrorHistorySize()).toBeLessThanOrEqual(ERROR_HISTORY_MAX_ENTRIES)
   })
 
   test("errors with different thresholds purge at different times", () => {
@@ -163,6 +222,7 @@ describe("L4 — Error Purging", () => {
 describe("L4 — applyCleanup integration", () => {
   beforeEach(() => {
     clearDedupCache()
+    resetErrorHistory()
   })
 
   test("applyCleanup: passes through non-duplicate output", () => {

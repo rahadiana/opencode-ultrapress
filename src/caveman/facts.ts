@@ -62,7 +62,24 @@ export function extractCodeBlocks(text: string): { compressedText: string, block
 export function restoreCodeBlocks(text: string, blocks: string[]): string {
   let result = text
   for (let i = 0; i < blocks.length; i++) {
-    result = result.replace(`__CODE_BLOCK_${i}__`, blocks[i])
+    // Use replaceAll to handle all occurrences of each placeholder
+    const placeholder = `__CODE_BLOCK_${i}__`
+    result = result.split(placeholder).join(blocks[i])
   }
   return result
+}
+
+/**
+ * Verify that all code block placeholders are still present after compression.
+ * Returns true if all placeholders are found, false if any are missing.
+ * Used as a safety check for LLM/MLM modes to detect when models corrupt placeholders.
+ */
+export function verifyPlaceholders(text: string, expectedCount: number): { valid: boolean; missing: number[] } {
+  const missing: number[] = []
+  for (let i = 0; i < expectedCount; i++) {
+    if (!text.includes(`__CODE_BLOCK_${i}__`)) {
+      missing.push(i)
+    }
+  }
+  return { valid: missing.length === 0, missing }
 }

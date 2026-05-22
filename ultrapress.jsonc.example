@@ -1,26 +1,27 @@
 {
   "enabled": true,
   "notification": "minimal", // Pilihan: "off", "minimal", "detailed"
-  "autoUpdate": true,
 
   // LAYER 1: Output Filtering (RTK Engine)
   "outputFilter": {
     "enabled": true,
     "maxCharsPerOutput": 8000, // Batas karakter log sebelum dipotong (middle-out)
-    "teeSaveOnTruncate": true   // Simpan log asli ke file .log jika terpotong
+    "teeSaveOnTruncate": true,   // Simpan log asli ke file .log jika terpotong
+    "skipTools": ["task"]      // Tool yang tidak boleh difilter
   },
 
   // LAYER 2: Semantic Compression (Caveman)
   "semantic": {
     "enabled": true,
     "mode": "nlp",               // Pilihan: "nlp" (Rule-based) atau "mlm" (AI-based)
-    "model": "Xenova/distilbert-base-uncased", // Model AI (untuk mode mlm). Gunakan "Xenova/bert-base-multilingual-uncased" untuk Bahasa Indonesia.
+    "model": "Xenova/all-MiniLM-L6-v2", // Model AI (untuk mode mlm). Gunakan "Xenova/bert-base-multilingual-uncased" untuk Bahasa Indonesia.
     "compressUserMessages": true,
     "compressAssistantMessages": false,
     "compressToolOutputs": true,
     "protectCodeBlocks": true,   // JANGAN pernah kompresi di dalam ``` blocks
     "protectErrors": true,       // Lindungi stack traces agar tetap akurat
-    "minLengthChars": 200        // Hanya kompresi jika pesan lebih panjang dari ini
+    "minLengthChars": 200,       // Hanya kompresi jika pesan lebih panjang dari ini
+    "skipTools": ["task"]        // Tool yang tidak boleh dikompresi (sub-agent output)
   },
 
   // LAYER 3: Smart Summarization (DCP)
@@ -30,9 +31,11 @@
     "maxContextLimit": 70000,    // Ambang batas keras untuk memulai kompresi
     "minContextLimit": 40000,    // Ambang batas mulai memberikan peringatan (nudge)
     "nudgeFrequency": 5,         // Munculkan pengingat setiap X pesan
+    "nudgeThreshold": 0.70,      // Nudge saat context mencapai 70% dari maxContextLimit (0-1)
     "summaryBuffer": true,       // Beri ruang napas ekstra setelah kompresi
     "showCompression": true,     // Tampilkan notifikasi saat kompresi berhasil
-    "preserveLastN": 3           // Jangan prune N pesan terakhir (0 = mati)
+    "preserveLastN": 3,          // Jangan prune N pesan terakhir (0 = mati)
+    "scoreThreshold": 0          // 0 = disabled, 0.45 = rekomendasi untuk multi-signal scoring
   },
 
   // LAYER 4: Auto Cleanup (Purge Engine)
@@ -44,5 +47,15 @@
       "enabled": true,
       "turns": 4                 // Hapus pesan error otomatis setelah X giliran chat
     }
+  },
+
+  // Slash commands
+  "commands": {
+    "enabled": true              // Enable /up slash commands
   }
 }
+
+// CATATAN PENTING:
+// - File runtime config (~/.config/opencode/ultrapress.json) harus JSON murni tanpa komentar
+// - File ini adalah JSONC (dengan komentar) hanya untuk referensi
+// - Jika copy file ini ke runtime path, hapus semua komentar atau gunakan JSON parser yang support JSONC

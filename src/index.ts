@@ -4,6 +4,7 @@
  */
 
 import { mergeConfig, createSessionStats } from "./config/defaults.js"
+import { sanitizeConfig } from "./config/validate.js"
 import type { UltraPressConfig, SessionStats } from "./config/schema.js"
 import { processToolOutput } from "./layers/layer1-output-filter.js"
 import { processMessageContext } from "./layers/layer2-caveman.js"
@@ -20,6 +21,7 @@ import * as logger from "./utils/logger.js"
 
 let config: UltraPressConfig
 let stats: SessionStats
+const sessionsPendingContextNote = new Set<string>()
 
 import { Hooks } from "@opencode-ai/plugin"
 import { join } from "path"
@@ -39,8 +41,10 @@ export async function server(ctx: any): Promise<Hooks> {
   
   try {
     const fileContent = await readFile(configPath, "utf-8")
-    const externalConfig = JSON.parse(fileContent)
-    baseConfig = mergeConfig(externalConfig)
+    // Strip JSONC comments before parsing
+    const strippedContent = fileContent.replace(/^\s*\/\/.*$/gm, "")
+    const externalConfig = JSON.parse(strippedContent)
+    baseConfig = sanitizeConfig(externalConfig)
     logger.info(`[Config] Loaded dedicated config from ${configPath}`)
   } catch (e: any) {
     if (e.code === "ENOENT") {
@@ -63,6 +67,7 @@ export async function server(ctx: any): Promise<Hooks> {
 
   // Reset compression state for clean session start (prevents ID collisions across sessions)
   resetCompressionState()
+  sessionsPendingContextNote.clear()
 
   logger.info("UltraPress activated! Compressing tokens in the background.")
   
@@ -220,7 +225,7 @@ export async function server(ctx: any): Promise<Hooks> {
                 }
               )
 
-              if (prunedCount > 0) {
+               if (prunedCount > 0) {
                   // Rebuild output.message from pruned array
                   // Map back: preserve original { info, parts } for kept messages,
                   // create synthetic entries for summary messages (which have .content)
@@ -240,11 +245,14 @@ export async function server(ctx: any): Promise<Hooks> {
                  }
                  output.message.length = 0
                  output.message.push(...newMessages)
-                 stats.savedByLayer.summarization += prunedCount
-                 resetContextTokens(0) // Reset context estimate after pruning
-                 logger.info(`[L3] Pruned ${prunedCount} messages from context.`)
-              }
-           }
+                  stats.savedByLayer.summarization += prunedCount
+                  resetContextTokens(0) // Reset context estimate after pruning
+                  if (sessionID) {
+                    sessionsPendingContextNote.add(sessionID)
+                  }
+                  logger.info(`[L3] Pruned ${prunedCount} messages from context.`)
+               }
+            }
 
             // Layer 2 + 3: Semantic Compression & DCP Nudge
             // Content lives in output.parts (TextPart.text) not output.message.content
@@ -280,11 +288,12 @@ export async function server(ctx: any): Promise<Hooks> {
                   }
                }
 
-               // ─── L3: Context Note (post-compression reminder) ───
-               if (config.summarization.enabled && stats.compressionCount > 0) {
-                  displayText += `\n\n[Context note: Older messages have been compressed. Focus on recent ${config.summarization.preserveLastN} messages.]`
-                  logger.info("[L3] Injected compressed context note into user prompt.")
-               }
+                // ─── L3: Context Note (post-compression reminder) ───
+                if (config.summarization.enabled && sessionID && sessionsPendingContextNote.has(sessionID)) {
+                   displayText += `\n\n[Context note: Older messages have been compressed. Focus on recent ${config.summarization.preserveLastN} messages.]`
+                   sessionsPendingContextNote.delete(sessionID)
+                   logger.info("[L3] Injected compressed context note into user prompt.")
+                }
 
                // Track compressed tokens
                stats.totalTokensCompressed += estimateTokens(content)

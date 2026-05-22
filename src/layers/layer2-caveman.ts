@@ -10,6 +10,20 @@ import { compressLLM } from "../caveman/llm.js"
 import * as logger from "../utils/logger.js"
 import { formatSavings } from "../utils/token-count.js"
 
+const ERROR_CONTENT_PATTERNS = [
+  /\berror\b/i,
+  /\bexception\b/i,
+  /\btraceback\b/i,
+  /\bpanic\b/i,
+  /\bfailed\b/i,
+  /\bstack trace\b/i,
+  /^\s*at\s+.+/m,
+]
+
+function looksLikeErrorContent(content: string): boolean {
+  return ERROR_CONTENT_PATTERNS.some((pattern) => pattern.test(content))
+}
+
 export interface Layer2Deps {
   config: SemanticConfig
   stats: SessionStats
@@ -35,6 +49,12 @@ export async function processMessageContext(
   if (role === "tool" && !deps.config.compressToolOutputs) return content
   if (role === "system") return content // We usually don't compress system prompts
 
+  // Protect error and stack-trace text when configured
+  if (deps.config.protectErrors && looksLikeErrorContent(content)) {
+    logger.debug("[L2] Skipping semantic compression: error-like content detected and protectErrors is enabled.")
+    return content
+  }
+
   // Check minimum length
   if (content.length < deps.config.minLengthChars) {
     logger.debug(`[L2] Skipping semantic compression: content length (${content.length}) is below threshold (${deps.config.minLengthChars}).`)
@@ -45,11 +65,17 @@ export async function processMessageContext(
     let result: { compressedText: string; originalTokens: number; compressedTokens: number }
 
     if (deps.config.mode === "mlm") {
-      result = await compressMLM(content, deps.config.model)
+      result = await compressMLM(content, deps.config.model, {
+        protectCodeBlocks: deps.config.protectCodeBlocks,
+      })
     } else if (deps.config.mode === "llm") {
-      result = await compressLLM(content)
+      result = await compressLLM(content, undefined, {
+        protectCodeBlocks: deps.config.protectCodeBlocks,
+      })
     } else {
-      result = compressNLP(content)
+      result = compressNLP(content, {
+        protectCodeBlocks: deps.config.protectCodeBlocks,
+      })
     }
 
     const saved = result.originalTokens - result.compressedTokens

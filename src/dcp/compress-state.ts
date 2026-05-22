@@ -21,9 +21,17 @@ export interface CompressionBlock {
   originalEntries?: Array<{ id: string; role: string; content: string }>
 }
 
-let nextBlockId = Date.now()
+let blockCounter = 0
 const blocksByMessageId = new Map<string, number[]>() // messageId → blockIds
 const blocksById = new Map<number, CompressionBlock>()
+
+let randomSuffix = Math.floor(Math.random() * 10000)
+
+function generateBlockId(): number {
+  blockCounter++
+  // Timestamp ensures ordering, counter + random ensures uniqueness across resets
+  return Date.now() * 10000 + (blockCounter % 1000) * 10 + (randomSuffix % 10)
+}
 
 export function createBlock(
   topic: string,
@@ -36,7 +44,7 @@ export function createBlock(
   preservedToolIds: string[],
 ): CompressionBlock {
   const block: CompressionBlock = {
-    blockId: nextBlockId++,
+    blockId: generateBlockId(),
     topic,
     startId,
     endId,
@@ -147,7 +155,8 @@ export function findBlock(query: string): CompressionBlock | undefined {
 
 /** Reset all state (for testing) */
 export function resetCompressionState(): void {
-  nextBlockId = 0
+  blockCounter = 0
+  randomSuffix = Math.floor(Math.random() * 10000)
   blocksByMessageId.clear()
   blocksById.clear()
   protectedContext.clear()
