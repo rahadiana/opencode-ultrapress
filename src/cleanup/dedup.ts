@@ -8,6 +8,16 @@ import crypto from "crypto"
 // Maps hash(tool+args) -> original tool output
 const sessionCache = new Map<string, { id: string; summary: string }>()
 
+export const DEDUP_CACHE_MAX_ENTRIES = 1000
+
+function enforceDedupCacheLimit(): void {
+  while (sessionCache.size > DEDUP_CACHE_MAX_ENTRIES) {
+    const oldestKey = sessionCache.keys().next().value
+    if (!oldestKey) break
+    sessionCache.delete(oldestKey)
+  }
+}
+
 export function hashToolCall(toolName: string, args: Record<string, any>): string {
   const normalizedArgs = JSON.stringify(args, Object.keys(args).sort())
   const str = `${toolName}:${normalizedArgs}`
@@ -50,10 +60,15 @@ export function deduplicateToolOutput(
   // Generate a tiny summary of the output to help LLM remember what it was without seeing the full output again
   const summary = output.slice(0, 100).replace(/\n/g, " ") + (output.length > 100 ? "..." : "")
   sessionCache.set(hash, { id: messageId, summary })
+  enforceDedupCacheLimit()
 
   return { isDuplicate: false, output }
 }
 
 export function clearDedupCache(): void {
   sessionCache.clear()
+}
+
+export function getDedupCacheSize(): number {
+  return sessionCache.size
 }

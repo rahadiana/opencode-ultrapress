@@ -16,11 +16,6 @@
       "description": "Log verbosity level.",
       "default": "minimal"
     },
-    "autoUpdate": {
-      "type": "boolean",
-      "description": "Auto-update from npm on OpenCode restart.",
-      "default": true
-    },
     "outputFilter": {
       "type": "object",
       "description": "Layer 1 — Tool output filtering.",
@@ -39,7 +34,8 @@
               "maxLines": { "type": "number", "description": "Maximum lines in filtered output" }
             },
             "required": ["commandPattern"]
-          }
+          },
+          "default": []
         },
         "skipTools": {
           "type": "array",

@@ -87,8 +87,6 @@ export type NotificationLevel = "off" | "minimal" | "detailed"
 export interface UltraPressConfig {
   /** Master switch */
   enabled: boolean
-  /** Auto-update plugin */
-  autoUpdate: boolean
   /** Layer 1 */
   outputFilter: OutputFilterConfig
   /** Layer 2 */

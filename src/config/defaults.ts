@@ -2,7 +2,6 @@ import type { UltraPressConfig, SessionStats } from "./schema.js"
 
 export const DEFAULT_CONFIG: UltraPressConfig = {
   enabled: true,
-  autoUpdate: true,
 
   // Layer 1 - Output Filter
   outputFilter: {

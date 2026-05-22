@@ -12,7 +12,6 @@ UltraPress works *out-of-the-box* with optimal default values. The configuration
 {
   "enabled": true,           // Master switch
   "notification": "minimal", // Notification level
-  "autoUpdate": true,        // Auto-update from npm
 
   // LAYER 1 — Output Filtering
   "outputFilter": { /* ... */ },
@@ -36,7 +35,6 @@ UltraPress works *out-of-the-box* with optimal default values. The configuration
 | :--- | :--- | :--- | :--- |
 | `enabled` | `boolean` | `true` | Master switch. `false` = disable entire plugin. |
 | `notification` | `"off"` / `"minimal"` / `"detailed"` | `"minimal"` | How detailed UltraPress logs are in the OpenCode console. |
-| `autoUpdate` | `boolean` | `true` | Auto-check & update from npm when OpenCode restarts. |
 
 ---
 
@@ -50,6 +48,7 @@ Intercepts CLI tool output before it enters the context window. Most effective f
 | `outputFilter.maxCharsPerOutput` | `number` | `8000` | Character limit before *middle-out* truncation. Beginning & end of output are preserved. |
 | `outputFilter.teeSaveOnTruncate` | `boolean` | `true` | If output is truncated, save the original log to a temporary `.log` file. Useful for debugging. |
 | `outputFilter.customFilters` | `CustomFilter[]` | `[]` | Custom filters for specific CLI tools. [See details](#custom-filters). |
+| `outputFilter.skipTools` | `string[]` | `["task"]` | Tool names to skip filtering. Keep `task` protected so sub-agent output is never compressed. |
 
 ### Example Use Case
 
@@ -81,6 +80,7 @@ Compresses message text semantically without changing meaning. Does not touch co
 | `semantic.protectCodeBlocks` | `boolean` | `true` | **NEVER** touch content inside triple backticks (` ``` `). |
 | `semantic.protectErrors` | `boolean` | `true` | Protect error messages and stack traces to keep them accurate. |
 | `semantic.minLengthChars` | `number` | `200` | Skip compression if text is shorter than this. Saves CPU for short messages. |
+| `semantic.skipTools` | `string[]` | `["task"]` | Tool names to skip semantic compression. Keep `task` protected so sub-agent output is never compressed. |
 
 ### NLP Mode (Default)
 
@@ -165,8 +165,12 @@ The most powerful layer. **Removes old messages from the context window** and re
 | :--- | :--- | :--- | :--- |
 | `summarization.enabled` | `boolean` | `true` | Enable Layer 3. |
 | `summarization.mode` | `"range"` / `"message"` | `"range"` | Pruning mode: `range` (sequential message block) or `message` (one/several specific IDs). |
-| `summarization.maxContextLimit` | `number` | `70000` | **Nudge** threshold. Nudge appears when 70% of limit is reached (pre-emptive). |
-| `summarization.minContextLimit` | `number` | `40000` | Token target after pruning. The LLM is directed to summarize down below this. |
+| `summarization.maxContextLimit` | `number` | `70000` | Hard limit before compression nudge. |
+| `summarization.minContextLimit` | `number` | `40000` | Token target after pruning. |
+| `summarization.nudgeFrequency` | `number` | `5` | Show nudge every N turns. |
+| `summarization.nudgeThreshold` | `number` | `0.70` | Nudge when context reaches this fraction of maxContextLimit (0-1). |
+| `summarization.summaryBuffer` | `boolean` | `true` | Buffer summaries for batch processing. |
+| `summarization.showCompression` | `boolean` | `true` | Show compression notifications in output. |
 | `summarization.preserveLastN` | `number` | `3` | Do not prune the **last** N messages (0 = disable). Protects current conversation context. |
 | `summarization.scoreThreshold` | `number` | `0` | Multi-signal importance scoring (0-1). `0` = disable. `0.45` = recommended. Messages with score above threshold are preserved even if in the old block. |
 
@@ -421,7 +425,6 @@ For very long sessions (200+ messages), long CLI output.
 {
   "enabled": true,
   "notification": "minimal",
-  "autoUpdate": true,
 
   "outputFilter": {
     "enabled": true,
@@ -472,7 +475,6 @@ For short, focused sessions. Maximum protection for important messages.
 {
   "enabled": true,
   "notification": "detailed",
-  "autoUpdate": true,
 
   "outputFilter": {
     "enabled": true,
@@ -522,7 +524,6 @@ No ML models. No downloads. Works offline.
 {
   "enabled": true,
   "notification": "minimal",
-  "autoUpdate": false,
 
   "outputFilter": {
     "enabled": true,
@@ -548,10 +549,11 @@ No ML models. No downloads. Works offline.
     "maxContextLimit": 60000,
     "minContextLimit": 35000,
     "nudgeFrequency": 5,
-    "summaryBuffer": false,
+    "nudgeThreshold": 0.70,
+    "summaryBuffer": true,
     "showCompression": true,
     "preserveLastN": 4,
-    "scoreThreshold": 0
+    "scoreThreshold": 0.45
   },
 
   "cleanup": {
@@ -581,7 +583,6 @@ The `ultrapress.schema.json` file validates configuration:
       "enum": ["off", "minimal", "detailed"],
       "default": "minimal"
     },
-    "autoUpdate": { "type": "boolean", "default": true },
     "outputFilter": {
       "type": "object",
       "properties": {
@@ -677,7 +678,6 @@ The `ultrapress.schema.json` file validates configuration:
 interface UltraPressConfig {
   enabled: boolean
   notification: "off" | "minimal" | "detailed"
-  autoUpdate: boolean
   outputFilter: OutputFilterConfig
   semantic: SemanticConfig
   summarization: SummarizationConfig

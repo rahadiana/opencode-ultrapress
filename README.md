@@ -278,7 +278,6 @@ File: `~/.config/opencode/ultrapress.json`
 {
   "enabled": true,           // Master switch
   "notification": "minimal", // "off" | "minimal" | "detailed"
-  "autoUpdate": true,        // Auto-update from npm
 
       "outputFilter": {},
       "semantic": {},

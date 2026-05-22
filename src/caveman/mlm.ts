@@ -15,7 +15,7 @@
 
 import type { NLPResult } from "./nlp.js"
 import { estimateTokens } from "../utils/token-count.js"
-import { extractCodeBlocks, restoreCodeBlocks } from "./facts.js"
+import { extractCodeBlocks, restoreCodeBlocks, verifyPlaceholders } from "./facts.js"
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -26,6 +26,10 @@ let currentModelName: string | undefined = undefined
 
 const SIMILARITY_THRESHOLD = 0.85 // consecutive sentences above this → duplicate
 const MAX_SENTENCE_CHARS = 5000
+
+export interface MLMCompressOptions {
+  protectCodeBlocks?: boolean
+}
 
 // ---------------------------------------------------------------------------
 // Cosine Similarity
@@ -111,13 +115,18 @@ async function embed(pipeline: any, sentence: string): Promise<number[] | null> 
 
 export async function compressMLM(
   text: string,
-  modelName: string = "Xenova/all-MiniLM-L6-v2"
+  modelName?: string,
+  options: MLMCompressOptions = {}
 ): Promise<NLPResult> {
   const originalTokens = estimateTokens(text)
+  const protectCodeBlocks = options.protectCodeBlocks ?? true
+  const effectiveModelName = modelName ?? "Xenova/all-MiniLM-L6-v2"
 
   try {
     // ── 1. Protect code blocks ──────────────────────────────────────────
-    const { compressedText: noCodeText, blocks } = extractCodeBlocks(text)
+    const { compressedText: noCodeText, blocks } = protectCodeBlocks
+      ? extractCodeBlocks(text)
+      : { compressedText: text, blocks: [] }
 
     // ── 2. Split into sentences ─────────────────────────────────────────
     const sentences = splitSentences(noCodeText)
@@ -125,11 +134,14 @@ export async function compressMLM(
     // Need at least 3 sentences for dedup to be meaningful
     if (sentences.length < 3) {
       const { compressNLP } = await import("./nlp.js")
-      return { ...compressNLP(text), method: "fallback-too-few-sentences" }
+      return {
+        ...compressNLP(text, { protectCodeBlocks }),
+        method: "fallback-too-few-sentences",
+      }
     }
 
     // ── 3. Load model ───────────────────────────────────────────────────
-    const pipe = await loadModel(modelName)
+    const pipe = await loadModel(effectiveModelName)
 
     // ── 4. Embed all sentences ──────────────────────────────────────────
     const embeddings: (number[] | null)[] = await Promise.all(
@@ -139,7 +151,10 @@ export async function compressMLM(
     // If any embedding failed, fall back
     if (embeddings.some(e => e === null)) {
       const { compressNLP } = await import("./nlp.js")
-      return { ...compressNLP(text), method: "embed-failed" }
+      return {
+        ...compressNLP(text, { protectCodeBlocks }),
+        method: "embed-failed",
+      }
     }
 
     // ── 5. Semantic dedup (all-pairs cosine similarity) ─────────────────
@@ -168,7 +183,18 @@ export async function compressMLM(
     let compressedText = keptIndices.map(i => sentences[i]).join(" ")
 
     // ── 7. Restore code blocks ──────────────────────────────────────────
-    compressedText = restoreCodeBlocks(compressedText, blocks)
+    if (protectCodeBlocks) {
+      const placeholderCheck = verifyPlaceholders(compressedText, blocks.length)
+      if (!placeholderCheck.valid) {
+        return {
+          compressedText: text,
+          originalTokens,
+          compressedTokens: originalTokens,
+          method: "mlm-placeholder-safety",
+        }
+      }
+      compressedText = restoreCodeBlocks(compressedText, blocks)
+    }
 
     // Cleanup whitespace
     compressedText = compressedText
@@ -197,7 +223,10 @@ export async function compressMLM(
   } catch (e) {
     console.warn("UltraPress [MLM]: compression failed, falling back to NLP.", e)
     const { compressNLP } = await import("./nlp.js")
-    return { ...compressNLP(text), method: "mlm-fallback-error" }
+    return {
+      ...compressNLP(text, { protectCodeBlocks }),
+      method: "mlm-fallback-error",
+    }
   }
 }
 

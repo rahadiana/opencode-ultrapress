@@ -3,7 +3,10 @@
  * Applies RTK-style smart filtering to raw tool outputs before they hit the LLM context.
  */
 
-import type { OutputFilterConfig, FilterResult, SessionStats } from "../config/schema.js"
+import { mkdirSync, writeFileSync } from "fs"
+import { join } from "path"
+import { tmpdir } from "os"
+import type { CustomFilter, OutputFilterConfig, FilterResult, SessionStats } from "../config/schema.js"
 import { filterBash, detectBashCategory } from "../filters/bash.js"
 import { filterGit } from "../filters/git.js"
 import { filterTest, detectTestFramework } from "../filters/test.js"
@@ -80,8 +83,9 @@ export function processToolOutput(
 
     // Tee save on truncate
     if (result.truncated && deps.config.teeSaveOnTruncate) {
-       // In a real plugin, we would write rawOutput to a temp file and append the path to result.output
-       // result.output += `\n\n[Full output saved to: /tmp/ultrapress-...]`
+       const fullOutputPath = saveTruncatedOutput(toolName, rawOutput)
+       result.fullOutputPath = fullOutputPath
+       result.output += `\n\n[Full output saved to: ${fullOutputPath}]`
     }
 
     return result.output
@@ -92,25 +96,41 @@ export function processToolOutput(
   }
 }
 
-function applyCustomFilters(command: string, output: string, filters: any[]): string {
+function saveTruncatedOutput(toolName: string, rawOutput: string): string {
+  const dir = join(tmpdir(), "opencode-ultrapress")
+  mkdirSync(dir, { recursive: true })
+  const safeToolName = toolName.replace(/[^a-z0-9_-]/gi, "_") || "tool"
+  const filePath = join(dir, `${Date.now()}-${safeToolName}.log`)
+  writeFileSync(filePath, rawOutput, "utf-8")
+  return filePath
+}
+
+function applyCustomFilters(command: string, output: string, filters: CustomFilter[]): string {
   let text = output
   for (const filter of filters) {
     try {
       const regex = new RegExp(filter.commandPattern)
-      if (regex.test(command)) {
-        let lines = text.split("\n")
-        
-        if (filter.stripPatterns) {
-           for (const pattern of filter.stripPatterns) {
-              const stripRegex = new RegExp(pattern)
-              lines = lines.filter(l => !stripRegex.test(l))
-           }
-        }
-        
-        text = lines.join("\n")
+      if (!regex.test(command)) continue
+
+      let lines = text.split("\n")
+      const keepRegexes = filter.keepPatterns.map(p => new RegExp(p))
+      const stripRegexes = filter.stripPatterns.map(p => new RegExp(p))
+
+      if (stripRegexes.length > 0) {
+        lines = lines.filter(line => {
+          if (keepRegexes.some(keep => keep.test(line))) return true
+          return !stripRegexes.some(strip => strip.test(line))
+        })
       }
-    } catch (e) {
-      // ignore bad regex
+
+      if (filter.maxLines && lines.length > filter.maxLines) {
+        const omitted = lines.length - filter.maxLines
+        lines = [...lines.slice(0, filter.maxLines), `... [${omitted} lines omitted by custom filter]`]
+      }
+
+      text = lines.join("\n")
+    } catch {
+      // Ignore invalid user regex
     }
   }
   return text

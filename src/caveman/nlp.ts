@@ -14,6 +14,10 @@ export interface NLPResult {
   method?: string
 }
 
+export interface NLPCompressOptions {
+  protectCodeBlocks?: boolean
+}
+
 function compressSentence(sentence: string): string {
   const words = sentence.split(/\s+/)
   const keptWords: string[] = []
@@ -51,11 +55,14 @@ function compressSentence(sentence: string): string {
   return keptWords.join(" ")
 }
 
-export function compressNLP(text: string): NLPResult {
+export function compressNLP(text: string, options: NLPCompressOptions = {}): NLPResult {
   const originalTokens = estimateTokens(text)
+  const protectCodeBlocks = options.protectCodeBlocks ?? true
 
   // 1. Protect code blocks
-  const { compressedText: noCodeText, blocks } = extractCodeBlocks(text)
+  const { compressedText: noCodeText, blocks } = protectCodeBlocks
+    ? extractCodeBlocks(text)
+    : { compressedText: text, blocks: [] }
 
   // 2. Split into lines and process (preserves paragraph structure roughly)
   const lines = noCodeText.split("\n")
@@ -85,7 +92,10 @@ export function compressNLP(text: string): NLPResult {
   }
 
   // 3. Restore code blocks
-  let finalText = restoreCodeBlocks(compressedLines.join("\n"), blocks)
+  let finalText = compressedLines.join("\n")
+  if (protectCodeBlocks) {
+    finalText = restoreCodeBlocks(finalText, blocks)
+  }
 
   // 4. Cleanup excessive spaces
   finalText = finalText.replace(/[ \t]{2,}/g, " ").replace(/\n{3,}/g, "\n\n").trim()
