@@ -85,14 +85,45 @@ function splitSentences(text: string): string[] {
 
 export async function loadModel(modelName: string): Promise<any> {
   if (!pipelineInstance || currentModelName !== modelName) {
+    // Dispose previous pipeline to prevent worker/orphan process leaks on Windows
+    if (pipelineInstance) {
+      await disposePipeline(pipelineInstance)
+      pipelineInstance = null
+    }
+
     console.info(`UltraPress [MLM]: Loading model (${modelName})...`)
+
+    // Limit ONNX Runtime threads to prevent excessive Bun worker processes
+    // ORT uses one thread per worker; default = all CPU cores → many processes on Windows
+    process.env.ORT_NUM_THREADS = process.env.ORT_NUM_THREADS || "2"
+
     const { pipeline: loadPipeline, env } = await import("@huggingface/transformers")
     Object.assign(env, { allowLocalModels: true, allowRemoteModels: true })
+
+    // Limit WASM backend threads (belt + suspenders for browser/Bun WASM paths)
+    if (env.backends?.onnx?.wasm) {
+      env.backends.onnx.wasm.numThreads = 2
+    }
+
     pipelineInstance = await loadPipeline("feature-extraction", modelName, { dtype: "q8" })
     currentModelName = modelName
     console.info("UltraPress [MLM]: Model loaded.")
   }
   return pipelineInstance
+}
+
+/**
+ * Safely dispose a pipeline instance, releasing ONNX Runtime workers.
+ * Prevents orphan Bun processes from accumulating on Windows.
+ */
+async function disposePipeline(pipe: any): Promise<void> {
+  try {
+    if (typeof pipe?.dispose === "function") {
+      await pipe.dispose()
+    }
+  } catch {
+    // Best-effort cleanup — pipeline may not support dispose()
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -232,8 +263,10 @@ export async function compressMLM(
 
 /**
  * Reset the cached pipeline (useful for testing / config changes).
+ * Properly disposes ONNX Runtime workers to prevent process leaks.
  */
-export function resetMLMPipeline(): void {
+export async function resetMLMPipeline(): Promise<void> {
+  await disposePipeline(pipelineInstance)
   pipelineInstance = null
   currentModelName = undefined
 }

@@ -1,15 +1,16 @@
 name: Publish to npm
 
 on:
-  push:
-    branches:
-      - main
-    tags:
-      - 'v*'          # Trigger on version tags (v0.2.0, v1.0.0, etc.)
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:   # Manual trigger from Actions tab
 
 jobs:
   publish:
+    # Only publish if CI passed OR triggered manually
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -33,17 +34,12 @@ jobs:
           echo "Tag: $TAG_VERSION — syncing to package.json"
           npm version "$TAG_VERSION" --no-git-tag-version --allow-same-version
 
-      - name: Show version (manual)
-        if: github.event_name == 'workflow_dispatch'
-        run: node -e "console.log('Manual publish — version:', require('./package.json').version)"
+      - name: Show version
+        run: node -e "console.log('Publishing version:', require('./package.json').version)"
 
       - run: bun install
 
-      - run: bun run lint
-
       - run: bun run build
-
-      - run: bun test
 
       - name: Publish to npm
         run: |

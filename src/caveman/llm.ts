@@ -36,14 +36,43 @@ export interface LLMCompressOptions {
 
 async function loadModel(modelName: string): Promise<any> {
   if (!pipelineInstance || currentModelName !== modelName) {
+    // Dispose previous pipeline to prevent worker/orphan process leaks on Windows
+    if (pipelineInstance) {
+      await disposePipeline(pipelineInstance)
+      pipelineInstance = null
+    }
+
     console.info(`UltraPress [LLM]: Loading summarization model (${modelName})...`)
+
+    // Limit ONNX Runtime threads to prevent excessive Bun worker processes
+    process.env.ORT_NUM_THREADS = process.env.ORT_NUM_THREADS || "2"
+
     const { pipeline: loadPipeline, env } = await import("@huggingface/transformers")
     Object.assign(env, { allowLocalModels: true, allowRemoteModels: true })
+
+    // Limit WASM backend threads
+    if (env.backends?.onnx?.wasm) {
+      env.backends.onnx.wasm.numThreads = 2
+    }
+
     pipelineInstance = await loadPipeline("summarization", modelName, { dtype: "q8" })
     currentModelName = modelName
     console.info("UltraPress [LLM]: Summarization model loaded.")
   }
   return pipelineInstance
+}
+
+/**
+ * Safely dispose a pipeline instance, releasing ONNX Runtime workers.
+ */
+async function disposePipeline(pipe: any): Promise<void> {
+  try {
+    if (typeof pipe?.dispose === "function") {
+      await pipe.dispose()
+    }
+  } catch {
+    // Best-effort cleanup
+  }
 }
 
 // ─── Chunking ───────────────────────────────────────────────────────────
@@ -171,8 +200,10 @@ export async function compressLLM(
 
 /**
  * Reset the cached pipeline (useful for testing / config changes).
+ * Properly disposes ONNX Runtime workers to prevent process leaks.
  */
-export function resetLLMPipeline(): void {
+export async function resetLLMPipeline(): Promise<void> {
+  await disposePipeline(pipelineInstance)
   pipelineInstance = null
   currentModelName = undefined
 }
