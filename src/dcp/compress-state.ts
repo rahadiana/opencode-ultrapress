@@ -22,15 +22,15 @@ export interface CompressionBlock {
 }
 
 let blockCounter = 0
+let resetGeneration = 0
 const blocksByMessageId = new Map<string, number[]>() // messageId → blockIds
 const blocksById = new Map<number, CompressionBlock>()
 
-let randomSuffix = Math.floor(Math.random() * 10000)
-
 function generateBlockId(): number {
   blockCounter++
-  // Timestamp ensures ordering, counter + random ensures uniqueness across resets
-  return Date.now() * 10000 + (blockCounter % 1000) * 10 + (randomSuffix % 10)
+  // Keep IDs below Number.MAX_SAFE_INTEGER while preserving ordering and reset uniqueness.
+  const timePrefix = Date.now() % 1_000_000_000
+  return timePrefix * 1_000_000 + resetGeneration * 10_000 + blockCounter
 }
 
 export function createBlock(
@@ -156,7 +156,7 @@ export function findBlock(query: string): CompressionBlock | undefined {
 /** Reset all state (for testing) */
 export function resetCompressionState(): void {
   blockCounter = 0
-  randomSuffix = Math.floor(Math.random() * 10000)
+  resetGeneration++
   blocksByMessageId.clear()
   blocksById.clear()
   protectedContext.clear()
