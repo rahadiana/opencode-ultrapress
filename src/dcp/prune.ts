@@ -20,6 +20,39 @@ export interface MessageLike {
   content?: string
 }
 
+const IMPORTANT_CONTEXT_MARKERS = [
+  /(?:^|\s)(TODO|FIXME|HACK)\b/i,
+  /\bACTION\s+ITEM\b/i,
+  /\bROOT\s+CAUSE\b/i,
+  /\bRCA\b/i,
+  /\bDECISION(?:\s+LOG)?\b/i,
+  /\bBLOCKER\b/i,
+]
+
+function getMessageText(msg: MessageLike): string {
+  const contentChunks: string[] = []
+
+  if (typeof msg.content === "string" && msg.content.length > 0) {
+    contentChunks.push(msg.content)
+  }
+
+  if (msg.parts) {
+    for (const part of msg.parts) {
+      if (part.type === "text" && typeof part.text === "string") {
+        contentChunks.push(part.text)
+      }
+    }
+  }
+
+  return contentChunks.join("\n")
+}
+
+function hasImportantMarker(msg: MessageLike): boolean {
+  const text = getMessageText(msg)
+  if (!text) return false
+  return IMPORTANT_CONTEXT_MARKERS.some((pattern) => pattern.test(text))
+}
+
 // ─── MessageLike → MessageMeta conversion ───────────────────────────────
 
 function toMeta(msg: MessageLike, index: number, total: number): MessageMeta {
@@ -153,6 +186,8 @@ function pruneBlock(
  * Check if a message should be protected from pruning.
  */
 function isProtectedMessage(msg: MessageLike): boolean {
+  if (hasImportantMarker(msg)) return true
+
   if (!msg.parts) return false
   for (const part of msg.parts) {
     if (part.type === "tool") {

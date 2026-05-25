@@ -16,7 +16,15 @@ const ERROR_CONTENT_PATTERNS = [
   /\btraceback\b/i,
   /\bpanic\b/i,
   /\bfailed\b/i,
+  /\bfatal\b/i,
+  /\bunhandled(?:\s+promise)?\s+rejection\b/i,
+  /\b(segmentation fault|segfault)\b/i,
+  /\b(?:type|reference|syntax|range|aggregate)error\b/i,
   /\bstack trace\b/i,
+  /^\s*caused by:\s+/im,
+  /^\s*file\s+".+",\s+line\s+\d+/im,
+  /^\s*at\s+.+\(.+:\d+:\d+\)\s*$/m,
+  /^\s*at\s+.+:\d+:\d+\s*$/m,
   /^\s*at\s+.+/m,
 ]
 

@@ -74,6 +74,17 @@ describe("Config Validation", () => {
     expect(result.semantic.skipTools).toEqual(["task"])
   })
 
+  test("sanitizeConfig: enforces required protected skipTool even when user removes it", () => {
+    const result = sanitizeConfig({
+      outputFilter: { skipTools: [] },
+      semantic: { skipTools: ["write"] },
+    })
+
+    expect(result.outputFilter.skipTools).toContain("task")
+    expect(result.semantic.skipTools).toContain("task")
+    expect(result.semantic.skipTools).toContain("write")
+  })
+
   test("sanitizeConfig: handles booleans robustly", () => {
     const result = sanitizeConfig({
       outputFilter: { teeSaveOnTruncate: "yes" as any },
@@ -289,6 +300,20 @@ describe("DCP Pruning", () => {
 
     const result = applyPruning(messages, 0, 0)
     expect(result.prunedCount).toBe(0) // protected tool inside block → skip
+  })
+
+  test("pruning: important context markers are protected from pruning", () => {
+    const messages = [
+      makeMsg("start", "user"),
+      { id: "mid", role: "assistant", content: "DECISION: keep API compatible and avoid breaking clients" },
+      makeMsg("end", "assistant"),
+    ]
+
+    createBlock("block", "start", "end", "summary", 10, ["mid"], [], [])
+
+    const result = applyPruning(messages, 0, 0)
+    expect(result.prunedCount).toBe(0)
+    expect(messages.some((m) => m.id === "mid")).toBe(true)
   })
 
   test("pruning: scoring threshold preserves high-impact messages", () => {

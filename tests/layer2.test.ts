@@ -74,6 +74,22 @@ describe("Layer 2 - Caveman NLP", () => {
     expect(res).toBe(input)
   })
 
+  test("processMessageContext: protects Java/Python style stack traces", async () => {
+    const input = [
+      "UnhandledPromiseRejectionWarning: TypeError: Cannot read properties of undefined",
+      "Caused by: java.lang.IllegalStateException: bad state",
+      "File \"app.py\", line 42, in handler",
+      "at com.example.Service.run(Service.java:55)",
+    ].join("\n")
+
+    const res = await processMessageContext(input, "assistant", {
+      config: makeSemanticConfig({ protectErrors: true }),
+      stats: makeStats(),
+    })
+
+    expect(res).toBe(input)
+  })
+
   test("processMessageContext: allows compression of error-like content when protectErrors is disabled", async () => {
     const input = "This is an error in the build pipeline and it is failing because it is not configured correctly and it is causing repeated failures in production."
 

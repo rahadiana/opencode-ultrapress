@@ -23,6 +23,9 @@ import { extractCodeBlocks, restoreCodeBlocks, verifyPlaceholders } from "./fact
 
 let pipelineInstance: any = null
 let currentModelName: string | undefined = undefined
+let idleTimeout: NodeJS.Timeout | null = null
+
+const IDLE_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
 
 const SIMILARITY_THRESHOLD = 0.85 // consecutive sentences above this → duplicate
 const MAX_SENTENCE_CHARS = 5000
@@ -95,20 +98,27 @@ export async function loadModel(modelName: string): Promise<any> {
 
     // Limit ONNX Runtime threads to prevent excessive Bun worker processes
     // ORT uses one thread per worker; default = all CPU cores → many processes on Windows
-    process.env.ORT_NUM_THREADS = process.env.ORT_NUM_THREADS || "2"
+    process.env.ORT_NUM_THREADS = process.env.ORT_NUM_THREADS || "1"
 
     const { pipeline: loadPipeline, env } = await import("@huggingface/transformers")
     Object.assign(env, { allowLocalModels: true, allowRemoteModels: true })
 
     // Limit WASM backend threads (belt + suspenders for browser/Bun WASM paths)
     if (env.backends?.onnx?.wasm) {
-      env.backends.onnx.wasm.numThreads = 2
+      env.backends.onnx.wasm.numThreads = 1
     }
 
     pipelineInstance = await loadPipeline("feature-extraction", modelName, { dtype: "q8" })
     currentModelName = modelName
     console.info("UltraPress [MLM]: Model loaded.")
   }
+
+  // Clear any existing idle timeout when model is actively used
+  if (idleTimeout) {
+    clearTimeout(idleTimeout)
+    idleTimeout = null
+  }
+
   return pipelineInstance
 }
 
@@ -124,6 +134,25 @@ async function disposePipeline(pipe: any): Promise<void> {
   } catch {
     // Best-effort cleanup — pipeline may not support dispose()
   }
+}
+
+/**
+ * Reset idle timeout — called after any model usage.
+ * If no usage for IDLE_TIMEOUT_MS, pipeline will be disposed automatically.
+ */
+function resetIdleTimeout(): void {
+  if (idleTimeout) {
+    clearTimeout(idleTimeout)
+    idleTimeout = null
+  }
+  idleTimeout = setTimeout(() => {
+    if (pipelineInstance) {
+      disposePipeline(pipelineInstance)
+      pipelineInstance = null
+      currentModelName = undefined
+    }
+    idleTimeout = null
+  }, IDLE_TIMEOUT_MS)
 }
 
 // ---------------------------------------------------------------------------
@@ -173,6 +202,7 @@ export async function compressMLM(
 
     // ── 3. Load model ───────────────────────────────────────────────────
     const pipe = await loadModel(effectiveModelName)
+    resetIdleTimeout()
 
     // ── 4. Embed all sentences ──────────────────────────────────────────
     const embeddings: (number[] | null)[] = await Promise.all(
@@ -266,6 +296,10 @@ export async function compressMLM(
  * Properly disposes ONNX Runtime workers to prevent process leaks.
  */
 export async function resetMLMPipeline(): Promise<void> {
+  if (idleTimeout) {
+    clearTimeout(idleTimeout)
+    idleTimeout = null
+  }
   await disposePipeline(pipelineInstance)
   pipelineInstance = null
   currentModelName = undefined

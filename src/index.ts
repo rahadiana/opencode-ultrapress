@@ -18,10 +18,33 @@ import { applyCleanup, handleTurnTick } from "./layers/layer4-cleanup.js"
 import { handleSlashCommand } from "./commands/slash.js"
 import { estimateTokens } from "./utils/token-count.js"
 import * as logger from "./utils/logger.js"
+import { resetMLMPipeline } from "./caveman/mlm.js"
+import { resetLLMPipeline } from "./caveman/llm.js"
 
 let config: UltraPressConfig
 let stats: SessionStats
 const sessionsPendingContextNote = new Set<string>()
+const GLOBAL_CLEANUP_REGISTRY_KEY = "__ultrapressCleanupState__" as const
+
+type CleanupState = {
+  registered: boolean
+  done: boolean
+}
+
+function getCleanupState(): CleanupState {
+  const globalState = globalThis as typeof globalThis & {
+    [GLOBAL_CLEANUP_REGISTRY_KEY]?: CleanupState
+  }
+
+  if (!globalState[GLOBAL_CLEANUP_REGISTRY_KEY]) {
+    globalState[GLOBAL_CLEANUP_REGISTRY_KEY] = {
+      registered: false,
+      done: false,
+    }
+  }
+
+  return globalState[GLOBAL_CLEANUP_REGISTRY_KEY]
+}
 
 import { Hooks } from "@opencode-ai/plugin"
 import { join } from "path"
@@ -68,8 +91,45 @@ export async function server(ctx: any): Promise<Hooks> {
   // Reset compression state for clean session start (prevents ID collisions across sessions)
   resetCompressionState()
   sessionsPendingContextNote.clear()
+  
+  // Also dispose any cached MLM/LLM pipelines from previous sessions
+  await Promise.all([
+    resetMLMPipeline(),
+    resetLLMPipeline(),
+  ])
 
   logger.info("UltraPress activated! Compressing tokens in the background.")
+  
+  // Register best-effort cleanup on process exit signals (ONCE across all server() calls)
+  // Note: OpenCode may load UltraPress more than once in the same process,
+  // so we store guard state on globalThis (process-global), not module-local.
+  const cleanupState = getCleanupState()
+  if (!cleanupState.registered) {
+    cleanupState.registered = true
+    logger.info(`[Cleanup] Plugin active — PID ${process.pid}`)
+    const cleanupOnExit = async () => {
+      if (cleanupState.done) return
+      cleanupState.done = true
+      logger.info("[Cleanup] Disposing MLM/LLM pipelines before exit...")
+      // Force-kill fallback: exit in 5s even if dispose hangs
+      const forceTimer = setTimeout(() => process.exit(0), 5000)
+      try {
+        await Promise.all([
+          resetMLMPipeline(),
+          resetLLMPipeline(),
+        ])
+      } finally {
+        clearTimeout(forceTimer)
+        logger.info("[Cleanup] Done — exiting.")
+        process.exit(0)
+      }
+    }
+    // beforeExit can fire multiple times — use module-level guard
+    process.on("beforeExit", cleanupOnExit)
+    // Signals fire exactly once — use once() to auto-deregister
+    process.once("SIGTERM", cleanupOnExit)
+    process.once("SIGINT", cleanupOnExit)
+  }
   
   // Pre-load MLM model if enabled to avoid lag on first message
   if (config.semantic.enabled && config.semantic.mode === "mlm") {

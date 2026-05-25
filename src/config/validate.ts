@@ -9,6 +9,8 @@ import type {
 } from "./schema.js"
 import { DEFAULT_CONFIG } from "./defaults.js"
 
+const REQUIRED_SKIP_TOOLS = ["task"] as const
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
@@ -28,6 +30,14 @@ function asStringArray(value: unknown, fallback: string[]): string[] {
   if (!Array.isArray(value)) return fallback
   const strings = value.filter((item): item is string => typeof item === "string")
   return strings.length === value.length ? strings : fallback
+}
+
+function ensureRequiredSkipTools(tools: string[]): string[] {
+  const merged = new Set(tools)
+  for (const required of REQUIRED_SKIP_TOOLS) {
+    merged.add(required)
+  }
+  return Array.from(merged)
 }
 
 function asNotificationLevel(value: unknown, fallback: NotificationLevel): NotificationLevel {
@@ -54,18 +64,20 @@ function sanitizeCustomFilters(value: unknown, fallback: CustomFilter[]): Custom
 
 function sanitizeOutputFilter(value: unknown, fallback: OutputFilterConfig): OutputFilterConfig {
   const input = isRecord(value) ? value : {}
+  const skipTools = ensureRequiredSkipTools(asStringArray(input.skipTools, fallback.skipTools))
   return {
     enabled: asBoolean(input.enabled, fallback.enabled),
     maxCharsPerOutput: asNumber(input.maxCharsPerOutput, fallback.maxCharsPerOutput, { min: 100 }),
     teeSaveOnTruncate: asBoolean(input.teeSaveOnTruncate, fallback.teeSaveOnTruncate),
     customFilters: sanitizeCustomFilters(input.customFilters, fallback.customFilters),
-    skipTools: asStringArray(input.skipTools, fallback.skipTools),
+    skipTools,
   }
 }
 
 function sanitizeSemantic(value: unknown, fallback: SemanticConfig): SemanticConfig {
   const input = isRecord(value) ? value : {}
   const mode = input.mode === "nlp" || input.mode === "mlm" || input.mode === "llm" ? input.mode : fallback.mode
+  const skipTools = ensureRequiredSkipTools(asStringArray(input.skipTools, fallback.skipTools))
   return {
     enabled: asBoolean(input.enabled, fallback.enabled),
     mode,
@@ -76,7 +88,7 @@ function sanitizeSemantic(value: unknown, fallback: SemanticConfig): SemanticCon
     protectCodeBlocks: asBoolean(input.protectCodeBlocks, fallback.protectCodeBlocks),
     protectErrors: asBoolean(input.protectErrors, fallback.protectErrors),
     minLengthChars: asNumber(input.minLengthChars, fallback.minLengthChars, { min: 0 }),
-    skipTools: asStringArray(input.skipTools, fallback.skipTools),
+    skipTools,
   }
 }
 

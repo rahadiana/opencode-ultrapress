@@ -69,8 +69,16 @@ export function processToolOutput(
 
     // Custom Regex Filters (if configured)
     if (deps.config.customFilters && deps.config.customFilters.length > 0) {
-       result.output = applyCustomFilters(command, result.output, deps.config.customFilters)
+       const customResult = applyCustomFilters(command, result.output, deps.config.customFilters)
+       result.output = customResult.output
        result.filteredTokens = tokenCount.estimateTokens(result.output)
+
+       if (customResult.audit.matchedFilters > 0 &&
+          (customResult.audit.removedLines > 0 || customResult.audit.trimmedByMaxLines > 0 || customResult.audit.invalidRegexCount > 0)) {
+         logger.debug(
+           `[L1] Custom filters audit: matched=${customResult.audit.matchedFilters}, removedLines=${customResult.audit.removedLines}, trimmed=${customResult.audit.trimmedByMaxLines}, invalidRegex=${customResult.audit.invalidRegexCount}`
+         )
+       }
     }
 
     // Update Stats
@@ -105,14 +113,30 @@ function saveTruncatedOutput(toolName: string, rawOutput: string): string {
   return filePath
 }
 
-function applyCustomFilters(command: string, output: string, filters: CustomFilter[]): string {
+interface CustomFilterAudit {
+  matchedFilters: number
+  removedLines: number
+  trimmedByMaxLines: number
+  invalidRegexCount: number
+}
+
+function applyCustomFilters(command: string, output: string, filters: CustomFilter[]): { output: string; audit: CustomFilterAudit } {
   let text = output
+  const audit: CustomFilterAudit = {
+    matchedFilters: 0,
+    removedLines: 0,
+    trimmedByMaxLines: 0,
+    invalidRegexCount: 0,
+  }
+
   for (const filter of filters) {
     try {
       const regex = new RegExp(filter.commandPattern)
       if (!regex.test(command)) continue
+      audit.matchedFilters++
 
       let lines = text.split("\n")
+      const beforeLineCount = lines.length
       const keepRegexes = filter.keepPatterns.map(p => new RegExp(p))
       const stripRegexes = filter.stripPatterns.map(p => new RegExp(p))
 
@@ -121,17 +145,23 @@ function applyCustomFilters(command: string, output: string, filters: CustomFilt
           if (keepRegexes.some(keep => keep.test(line))) return true
           return !stripRegexes.some(strip => strip.test(line))
         })
+
+        const removed = Math.max(0, beforeLineCount - lines.length)
+        audit.removedLines += removed
       }
 
       if (filter.maxLines && lines.length > filter.maxLines) {
         const omitted = lines.length - filter.maxLines
+        audit.trimmedByMaxLines += omitted
         lines = [...lines.slice(0, filter.maxLines), `... [${omitted} lines omitted by custom filter]`]
       }
 
       text = lines.join("\n")
-    } catch {
-      // Ignore invalid user regex
+    } catch (err) {
+      audit.invalidRegexCount++
+      logger.debug(`[L1] Ignored invalid custom filter regex for pattern "${filter.commandPattern}": ${err}`)
     }
   }
-  return text
+
+  return { output: text, audit }
 }

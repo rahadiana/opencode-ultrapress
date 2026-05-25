@@ -2,7 +2,7 @@
 
 > File: `~/.config/opencode/ultrapress.json`
 
-UltraPress works *out-of-the-box* with optimal default values. The configuration file is optional — if not found, the plugin will automatically create it on first run.
+UltraPress works *out-of-the-box* with a **Balanced default profile** (recommended for most users). The configuration file is optional — if not found, the plugin will automatically create it on first run.
 
 ---
 
@@ -45,10 +45,10 @@ Intercepts CLI tool output before it enters the context window. Most effective f
 | Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `outputFilter.enabled` | `boolean` | `true` | Enable Layer 1. |
-| `outputFilter.maxCharsPerOutput` | `number` | `8000` | Character limit before *middle-out* truncation. Beginning & end of output are preserved. |
+| `outputFilter.maxCharsPerOutput` | `number` | `6000` | Character limit before *middle-out* truncation. Beginning & end of output are preserved. |
 | `outputFilter.teeSaveOnTruncate` | `boolean` | `true` | If output is truncated, save the original log to a temporary `.log` file. Useful for debugging. |
 | `outputFilter.customFilters` | `CustomFilter[]` | `[]` | Custom filters for specific CLI tools. [See details](#custom-filters). |
-| `outputFilter.skipTools` | `string[]` | `["task"]` | Tool names to skip filtering. Keep `task` protected so sub-agent output is never compressed. |
+| `outputFilter.skipTools` | `string[]` | `["task"]` | Tool names to skip filtering. **Safety guard:** `task` is always enforced internally even if you remove it from config. |
 
 ### Example Use Case
 
@@ -79,8 +79,8 @@ Compresses message text semantically without changing meaning. Does not touch co
 | `semantic.compressToolOutputs` | `boolean` | `true` | Compress tool output after L1 filtering. |
 | `semantic.protectCodeBlocks` | `boolean` | `true` | **NEVER** touch content inside triple backticks (` ``` `). |
 | `semantic.protectErrors` | `boolean` | `true` | Protect error messages and stack traces to keep them accurate. |
-| `semantic.minLengthChars` | `number` | `200` | Skip compression if text is shorter than this. Saves CPU for short messages. |
-| `semantic.skipTools` | `string[]` | `["task"]` | Tool names to skip semantic compression. Keep `task` protected so sub-agent output is never compressed. |
+| `semantic.minLengthChars` | `number` | `250` | Skip compression if text is shorter than this. Saves CPU for short messages. |
+| `semantic.skipTools` | `string[]` | `["task"]` | Tool names to skip semantic compression. **Safety guard:** `task` is always enforced internally even if you remove it from config. |
 
 ### NLP Mode (Default)
 
@@ -165,14 +165,14 @@ The most powerful layer. **Removes old messages from the context window** and re
 | :--- | :--- | :--- | :--- |
 | `summarization.enabled` | `boolean` | `true` | Enable Layer 3. |
 | `summarization.mode` | `"range"` / `"message"` | `"range"` | Pruning mode: `range` (sequential message block) or `message` (one/several specific IDs). |
-| `summarization.maxContextLimit` | `number` | `70000` | Hard limit before compression nudge. |
-| `summarization.minContextLimit` | `number` | `40000` | Token target after pruning. |
-| `summarization.nudgeFrequency` | `number` | `5` | Show nudge every N turns. |
+| `summarization.maxContextLimit` | `number` | `60000` | Hard limit before compression nudge. |
+| `summarization.minContextLimit` | `number` | `35000` | Token target after pruning. |
+| `summarization.nudgeFrequency` | `number` | `4` | Show nudge every N turns. |
 | `summarization.nudgeThreshold` | `number` | `0.70` | Nudge when context reaches this fraction of maxContextLimit (0-1). |
 | `summarization.summaryBuffer` | `boolean` | `true` | Buffer summaries for batch processing. |
 | `summarization.showCompression` | `boolean` | `true` | Show compression notifications in output. |
-| `summarization.preserveLastN` | `number` | `3` | Do not prune the **last** N messages (0 = disable). Protects current conversation context. |
-| `summarization.scoreThreshold` | `number` | `0` | Multi-signal importance scoring (0-1). `0` = disable. `0.45` = recommended. Messages with score above threshold are preserved even if in the old block. |
+| `summarization.preserveLastN` | `number` | `4` | Do not prune the **last** N messages (0 = disable). Protects current conversation context. |
+| `summarization.scoreThreshold` | `number` | `0.45` | Multi-signal importance scoring (0-1). `0` = disable. `0.45` = recommended. Messages with score above threshold are preserved even if in the old block. |
 
 ### Workflow
 
@@ -217,17 +217,24 @@ Protection for recent messages from being removed by pruning. Very important for
 }
 ```
 
-> `preserveLastN: 0` = disable protection. All messages except protected ones (`task`, `write`, `edit`) can be pruned.
+> `preserveLastN: 0` = disable recency protection only. Tool-protected content and marker-protected messages can still be preserved.
 
 ### Protected Content
 
 The following tool outputs are **automatically protected** from pruning:
 
 - `task` — sub-agent delegation
+- `skill` — skill loading/invocation
+- `todowrite` / `todoread` — execution-plan continuity
 - `write` — file writing
 - `edit` — file editing
-- `bash` (error results only) — successful `bash` output can still be pruned
-- `read` — file reading (filtered output only)
+- `ultrapress_compress` — compression control tool output
+
+In addition to tool protection, messages containing critical markers are preserved to avoid context loss during pruning:
+
+- `TODO`, `FIXME`, `HACK`
+- `ACTION ITEM`, `ROOT CAUSE`, `RCA`
+- `DECISION`, `DECISION LOG`, `BLOCKER`
 
 ### Example Use Case
 
@@ -307,76 +314,39 @@ Error messages more than N turns old are automatically removed from context:
 
 ## Custom Filters
 
-In addition to built-in domain filters, you can register custom processing for specific CLI tools. Powered by the `CustomFilter` API.
+In addition to built-in domain filters, you can define regex-based filters for specific commands.
+
+### `CustomFilter` Shape (actual runtime format)
+
+| Field | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `commandPattern` | `string` | ✅ | Regex to match command text (`new RegExp(commandPattern)`) |
+| `stripPatterns` | `string[]` | optional | Regex list to remove matching lines |
+| `keepPatterns` | `string[]` | optional | Regex list that always wins over `stripPatterns` |
+| `maxLines` | `number` | optional | Keep at most N lines after filtering |
+
+### Example — pytest summary
 
 ```jsonc
 {
   "outputFilter": {
     "customFilters": [
       {
-        "name": "kubectl-pod-status",
-        "matchers": [{ "type": "commandContains", "value": "kubectl get pods" }],
-        "process": {
-          "type": "keepLinesContaining",
-          "args": ["STATUS", "READY", "RESTARTS", "NAME"]
-        }
+        "commandPattern": "pytest",
+        "stripPatterns": ["PASSED"],
+        "keepPatterns": ["FAILED", "ERROR", "test session starts"],
+        "maxLines": 120
       }
     ]
   }
 }
 ```
 
-### CustomFilter API
+### Safety Notes
 
-| Field | Type | Description |
-| :--- | :--- | :--- |
-| `name` | `string` | Unique filter identifier. |
-| `matchers` | `Matcher[]` | How to identify this tool call. One or more conditions. |
-| `process` | `Process` | What to do with the output. |
-
-### Matcher Types
-
-| Type | Field | Example |
-| :--- | :--- | :--- |
-| `commandContains` | Command contains substring | `"grep"`, `"npx"`, `"kubectl"` |
-| `commandRegex` | Command matches regex | `"^git\\s+(diff|log)"` |
-| `outputContains` | Output contains text | `"error"`, `"FAILED"` |
-| `outputRegex` | Output matches regex | `"^\\d+\\s+tests?\\s+failed"` |
-
-### Process Types
-
-| Type | Description | args |
-| :--- | :--- | :--- |
-| `keepLinesContaining` | Keep only lines containing keywords | `["ERROR", "WARN"]` |
-| `removeLinesContaining` | Remove lines containing keywords | `["DEBUG", "INFO"]` |
-| `keepLinesMatching` | Keep only lines matching regex | `["^\\[ERROR\\]"]` |
-| `removeLinesMatching` | Remove lines matching regex | `["^\\s*$"]` (empty lines) |
-| `truncateAfterLine` | Truncate from line N onward | `[100]` |
-| `grep` | Keep only lines matching pattern | `["^\\d+\\s+tests?\\s+failed"]` |
-| `replace` | Replace pattern with text | `["\\x1b\\[[0-9;]*m", ""]` (strip ANSI) |
-
-### Custom Filter Example — pytest
-
-```jsonc
-{
-  "name": "pytest-summary",
-  "matchers": [
-    { "type": "commandContains", "value": "pytest" }
-  ],
-  "process": {
-    "type": "keepLinesContaining",
-    "args": ["PASSED", "FAILED", "ERROR", "passed", "failed", "error", "test session"]
-  }
-}
-```
-
-Result:
-```
-=== test session starts ===
-tests/test_auth.py .....PASSED
-tests/test_api.py ..FF..FAILED
-tests/test_db.py ......ERROR
-```
+- If a custom regex is invalid, UltraPress ignores it and writes a debug log.
+- Audit logs include matched filter count, removed line count, and max-line trims.
+- Keep `keepPatterns` explicit for critical lines to avoid accidental context loss.
 
 ---
 
@@ -416,6 +386,65 @@ UltraPress adds several `/up` commands to OpenCode for runtime control:
 ---
 
 ## Complete Example Configurations
+
+### Profile Selection Guide
+
+| Environment | Recommended Profile | Notes |
+| :--- | :--- | :--- |
+| Most users (default) | **Configuration 0 — Balanced** | Best ratio of savings vs context safety |
+| Very long sessions, heavy logs | **Configuration A — Aggressive** | Higher savings, more pruning pressure |
+| Short/focused sessions, high caution | **Configuration B — Conservative** | Higher context retention, less compression |
+| Low-resource devices (Termux/small VPS) | **Configuration C — NLP-Only** | Zero-model runtime, most stable footprint |
+
+### Configuration 0 — Balanced (Default)
+
+Recommended for most users. Good token savings with strong context safety.
+
+```jsonc
+{
+  "enabled": true,
+  "notification": "minimal",
+
+  "outputFilter": {
+    "enabled": true,
+    "maxCharsPerOutput": 6000,
+    "teeSaveOnTruncate": true,
+    "customFilters": []
+  },
+
+  "semantic": {
+    "enabled": true,
+    "mode": "nlp",
+    "compressUserMessages": true,
+    "compressAssistantMessages": false,
+    "compressToolOutputs": true,
+    "protectCodeBlocks": true,
+    "protectErrors": true,
+    "minLengthChars": 250
+  },
+
+  "summarization": {
+    "enabled": true,
+    "mode": "range",
+    "maxContextLimit": 60000,
+    "minContextLimit": 35000,
+    "nudgeFrequency": 4,
+    "nudgeThreshold": 0.70,
+    "summaryBuffer": true,
+    "showCompression": true,
+    "preserveLastN": 4,
+    "scoreThreshold": 0.45
+  },
+
+  "cleanup": {
+    "deduplication": { "enabled": true },
+    "purgeErrors": {
+      "enabled": true,
+      "turns": 4
+    }
+  }
+}
+```
 
 ### Configuration A — Aggressive (Max Savings)
 
@@ -570,105 +599,9 @@ No ML models. No downloads. Works offline.
 
 ## JSON Schema
 
-The `ultrapress.schema.json` file validates configuration:
+The source of truth is [`ultrapress.schema.json`](../ultrapress.schema.json).
 
-```json
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "type": "object",
-  "properties": {
-    "enabled": { "type": "boolean", "default": true },
-    "notification": {
-      "type": "string",
-      "enum": ["off", "minimal", "detailed"],
-      "default": "minimal"
-    },
-    "outputFilter": {
-      "type": "object",
-      "properties": {
-        "enabled": { "type": "boolean", "default": true },
-        "maxCharsPerOutput": { "type": "number", "default": 8000, "minimum": 100 },
-        "teeSaveOnTruncate": { "type": "boolean", "default": true },
-        "customFilters": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "name": { "type": "string" },
-              "matchers": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "type": { "type": "string" },
-                    "value": { "type": "string" }
-                  },
-                  "required": ["type", "value"]
-                }
-              },
-              "process": {
-                "type": "object",
-                "properties": {
-                  "type": { "type": "string" },
-                  "args": { "type": "array", "items": { "type": "string" } }
-                },
-                "required": ["type", "args"]
-              }
-            },
-            "required": ["name", "matchers", "process"]
-          }
-        }
-      }
-    },
-    "semantic": {
-      "type": "object",
-      "properties": {
-        "enabled": { "type": "boolean", "default": true },
-        "mode": { "type": "string", "enum": ["nlp", "mlm", "llm"], "default": "nlp" },
-        "model": { "type": "string" },
-        "compressUserMessages": { "type": "boolean", "default": true },
-        "compressAssistantMessages": { "type": "boolean", "default": false },
-        "compressToolOutputs": { "type": "boolean", "default": true },
-        "protectCodeBlocks": { "type": "boolean", "default": true },
-        "protectErrors": { "type": "boolean", "default": true },
-        "minLengthChars": { "type": "number", "default": 200, "minimum": 0 }
-      }
-    },
-    "summarization": {
-      "type": "object",
-      "properties": {
-        "enabled": { "type": "boolean", "default": true },
-        "mode": { "type": "string", "enum": ["range", "message"], "default": "range" },
-        "maxContextLimit": { "type": "number", "default": 70000 },
-        "minContextLimit": { "type": "number", "default": 40000 },
-        "nudgeFrequency": { "type": "number", "default": 5 },
-        "summaryBuffer": { "type": "boolean", "default": false },
-        "showCompression": { "type": "boolean", "default": true },
-        "preserveLastN": { "type": "number", "default": 3, "minimum": 0 },
-        "scoreThreshold": { "type": "number", "default": 0, "minimum": 0, "maximum": 1 }
-      }
-    },
-    "cleanup": {
-      "type": "object",
-      "properties": {
-        "deduplication": {
-          "type": "object",
-          "properties": {
-            "enabled": { "type": "boolean", "default": true }
-          }
-        },
-        "purgeErrors": {
-          "type": "object",
-          "properties": {
-            "enabled": { "type": "boolean", "default": true },
-            "turns": { "type": "number", "default": 4, "minimum": 1 }
-          }
-        }
-      }
-    }
-  }
-}
-```
+> Keep schema/docs/runtime in sync whenever adding or changing config keys.
 
 ---
 

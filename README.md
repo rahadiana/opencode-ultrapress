@@ -69,6 +69,34 @@
 | **Bun** | Latest | For development/testing only |
 | **@huggingface/transformers** | Auto-install | Only used when `mlm` mode is active |
 
+### Compatibility Matrix (Runtime)
+
+| Environment | NLP (default) | MLM | LLM | Notes |
+| :--- | :---: | :---: | :---: | :--- |
+| macOS (Intel/Apple Silicon) | ✅ | ✅ | ✅ | Best overall support |
+| Linux | ✅ | ✅ | ✅ | Good for server/workstation |
+| WSL2 | ✅ | ✅ | ✅ | Prefer enough RAM for MLM/LLM |
+| Windows | ✅ | ✅ | ✅ | Works via Node runtime |
+| Termux / low-resource mobile shell | ✅ | ⚠️ | ⚠️ | Prefer NLP mode to avoid model load overhead |
+
+Legend: ✅ recommended · ⚠️ possible but resource-sensitive
+
+### Cross-Platform Notes (npm install)
+
+UltraPress is pure TypeScript/Node plugin runtime and is designed to work across:
+
+- macOS
+- Linux
+- WSL
+- Termux (Node-supported environments)
+- Windows
+
+What to expect:
+
+- `npm install -g @rahadiana/opencode-ultrapress` should be stable across supported OS/runtime combinations.
+- `mlm` / `llm` modes may download model assets on first use (larger disk/RAM footprint).
+- If your environment is resource-limited (e.g., small VPS/Termux), use default **Balanced (NLP)** or force `semantic.mode: "nlp"` for zero-model operation.
+
 ### 1. Install the Plugin
 
 ```bash
@@ -98,7 +126,7 @@ Add the plugin to the OpenCode configuration file at `~/.config/opencode/config.
 
 ### 3. (Optional) Create Personal Configuration
 
-UltraPress works out-of-the-box with sensible defaults. For customization:
+UltraPress works out-of-the-box with **Balanced defaults**. For customization:
 
 ```bash
 # Install from GitHub → copy from the cloned repo
@@ -109,6 +137,35 @@ cp $(npm root -g)/@rahadiana/opencode-ultrapress/ultrapress.json.example ~/.conf
 ```
 
 Then edit `~/.config/opencode/ultrapress.json` as needed. If the file is not found, UltraPress will automatically create it with default values on first run.
+
+### Quick-Start Profiles by Device
+
+Use this as a practical starting point:
+
+| Device / Environment | Recommended Mode | Why |
+| :--- | :--- | :--- |
+| Low-RAM machine / Termux / tiny VPS | `semantic.mode: "nlp"` | Zero model download, lowest RAM/CPU overhead |
+| Typical laptop/dev machine | **Balanced defaults** | Best trade-off: token savings + context safety |
+| High-RAM workstation | `mlm` or `llm` (optional) | Higher semantic quality, more resource usage |
+
+Minimal override examples:
+
+```jsonc
+// Low-resource profile
+{
+  "semantic": { "mode": "nlp" }
+}
+```
+
+```jsonc
+// Higher-quality semantic profile (requires more RAM)
+{
+  "semantic": {
+    "mode": "mlm",
+    "model": "Xenova/all-MiniLM-L6-v2"
+  }
+}
+```
 
 ### Verify Installation
 
@@ -233,10 +290,11 @@ The most advanced system: **gives LLM autonomy to manage its own memory**. Unlik
 | :--- | :--- |
 | **Block-based Pruning** | When `ultrapress_compress` is called, LLM determines the message range to summarize. Block is stored, then executed on the **next** chat (not current — avoids race condition). |
 | **prune via `chat.message` Hook** | Each new message → plugin checks pending blocks → removes messages in range from context array → injects summary. |
-| **Protected Content** | Important tool output (`task`, `write`, `edit`, `bash` success results, `read`) is protected from pruning. Only `read` output is filtered. See `protected-content.ts`. |
+| **Protected Content** | Critical tool output (`task`, `skill`, `todowrite`, `todoread`, `write`, `edit`, `ultrapress_compress`) is protected from pruning. |
+| **Marker Protection** | Messages containing `TODO`, `FIXME`, `HACK`, `ACTION ITEM`, `ROOT CAUSE`, `RCA`, `DECISION`, `BLOCKER` are preserved from pruning. |
 | **Nesting Support** | Compression can be done on top of previous compression. Nested summaries are auto-merged. |
-| **`preserveLastN`** | Protects the **last** N messages from pruning — keeps recent conversation context intact. Default: `3`. Set to `0` to disable. |
-| **Multi-Signal Scoring** | In addition to `preserveLastN`, each message is scored from 5 signals (recency, role, tool type, keyword, content size). High-scoring messages are preserved even in old blocks. Default: off (`scoreThreshold: 0`), recommended: `0.45`. |
+| **`preserveLastN`** | Protects the **last** N messages from pruning — keeps recent conversation context intact. Default: `4`. Set to `0` to disable. |
+| **Multi-Signal Scoring** | In addition to `preserveLastN`, each message is scored from 5 signals (recency, role, tool type, keyword, content size). High-scoring messages are preserved even in old blocks. Default: `0.45` (balanced). |
 | **Reversible Compression** | `ultrapress_expand` tool — LLM can "expand" previously summarized blocks to see the original content. Original content is stored in plugin memory (not in LLM context). |
 | **Nudge @70%** | Nudge is sent when context reaches 70% limit (not 100%), giving LLM time to compress before context is truly full. |
 | **summaryBuffer** | After pruning, provides breathing room (no immediate re-nudge). |
@@ -293,7 +351,9 @@ File: `~/.config/opencode/ultrapress.json`
 | **L3** | `summarization` | Remove old messages, replace with summary, `preserveLastN` protection |
 | **L4** | `cleanup` | Dedup tool calls, auto-purge stale errors |
 
-> 👉 **[Open full documentation →](./docs/konfigurasi-lengkap.md)** covers all keys, types, defaults, custom filters, presets (Max Savings / Preservation / Silent / MLM), and troubleshooting.
+> 🔒 **Safety guard**: `task` is always enforced in `outputFilter.skipTools` and `semantic.skipTools` even if removed in user config. This prevents accidental sub-agent context loss.
+
+> 👉 **[Open full documentation →](./docs/konfigurasi-lengkap.md)** covers all keys, types, defaults, custom filters, presets (Balanced / Aggressive / Conservative / NLP-only), and troubleshooting.
 
 ---
 
@@ -638,14 +698,15 @@ Or switch to `"nlp"` mode which does not require external dependencies.
 
 - Check semantic mode: `"mode": "mlm"` — MLM model loading at startup can be slow. Switch to `"nlp"` for zero latency.
 - Check `notification` level: `"detailed"` prints many logs. Set to `"minimal"`.
-- Ensure `minLengthChars` is not too low (default 200 is optimal).
+- Ensure `minLengthChars` is not too low (default 250 is optimal).
 </details>
 
 <details>
 <summary><b>My important messages were deleted by pruning</b></summary>
 
-- Increase `preserveLastN` (default 3 → try 5 or 7)
-- Important tool output is automatically protected (`task`, `write`, `edit`, `bash`)
+- Increase `preserveLastN` (default 4 → try 6 or 7)
+- Important tool output is automatically protected (`task`, `skill`, `todowrite`, `todoread`, `write`, `edit`)
+- Decision markers are also protected (`TODO`, `FIXME`, `ACTION ITEM`, `ROOT CAUSE`, `DECISION`, `BLOCKER`)
 - If still deleted, report as a bug with detailed logs
 </details>
 
