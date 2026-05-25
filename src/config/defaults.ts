@@ -6,7 +6,7 @@ export const DEFAULT_CONFIG: UltraPressConfig = {
   // Layer 1 - Output Filter
   outputFilter: {
     enabled: true,
-    maxCharsPerOutput: 8000,
+    maxCharsPerOutput: 6000,
     teeSaveOnTruncate: true,
     customFilters: [],
     skipTools: ["task"],
@@ -22,7 +22,7 @@ export const DEFAULT_CONFIG: UltraPressConfig = {
     compressToolOutputs: true,
     protectCodeBlocks: true,
     protectErrors: true,
-    minLengthChars: 200,
+    minLengthChars: 250,
     skipTools: ["task"],
   },
 
@@ -30,14 +30,14 @@ export const DEFAULT_CONFIG: UltraPressConfig = {
   summarization: {
     enabled: true,
     mode: "range",
-    maxContextLimit: 70_000,
-    minContextLimit: 40_000,
-    nudgeFrequency: 5,
+    maxContextLimit: 60_000,
+    minContextLimit: 35_000,
+    nudgeFrequency: 4,
     nudgeThreshold: 0.70, // nudge at 70% of maxContextLimit
     summaryBuffer: true,
     showCompression: true,
-    preserveLastN: 3,
-    scoreThreshold: 0, // 0 = disabled, use 0.45 to enable multi-signal scoring
+    preserveLastN: 4,
+    scoreThreshold: 0.45,
   },
 
   // Layer 4 - Auto Cleanup
