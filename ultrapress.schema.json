@@ -21,7 +21,7 @@
       "description": "Layer 1 — Tool output filtering.",
       "properties": {
         "enabled": { "type": "boolean", "default": true },
-        "maxCharsPerOutput": { "type": "number", "default": 8000 },
+        "maxCharsPerOutput": { "type": "number", "default": 6000 },
         "teeSaveOnTruncate": { "type": "boolean", "default": true },
         "customFilters": {
           "type": "array",
@@ -40,7 +40,7 @@
         "skipTools": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Tool names to skip filtering (e.g., task for sub-agent output).",
+          "description": "Tool names to skip filtering. Safety guard: `task` is always enforced internally even if omitted in user config.",
           "default": ["task"]
         }
       }
@@ -57,11 +57,11 @@
         "compressToolOutputs": { "type": "boolean", "default": true },
         "protectCodeBlocks": { "type": "boolean", "default": true },
         "protectErrors": { "type": "boolean", "default": true },
-        "minLengthChars": { "type": "number", "default": 200 },
+        "minLengthChars": { "type": "number", "default": 250 },
         "skipTools": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Tool names to skip semantic compression (e.g., task for sub-agent output).",
+          "description": "Tool names to skip semantic compression. Safety guard: `task` is always enforced internally even if omitted in user config.",
           "default": ["task"]
         }
       }
@@ -72,14 +72,14 @@
       "properties": {
         "enabled": { "type": "boolean", "default": true },
         "mode": { "type": "string", "enum": ["range", "message"], "default": "range" },
-        "maxContextLimit": { "type": "number", "default": 70000 },
-        "minContextLimit": { "type": "number", "default": 40000 },
-        "nudgeFrequency": { "type": "number", "default": 5 },
+        "maxContextLimit": { "type": "number", "default": 60000 },
+        "minContextLimit": { "type": "number", "default": 35000 },
+        "nudgeFrequency": { "type": "number", "default": 4 },
         "nudgeThreshold": { "type": "number", "default": 0.70, "minimum": 0, "maximum": 1, "description": "Nudge when context reaches this fraction of maxContextLimit (0-1)." },
         "summaryBuffer": { "type": "boolean", "default": true },
         "showCompression": { "type": "boolean", "default": true },
-        "preserveLastN": { "type": "number", "default": 3 },
-        "scoreThreshold": { "type": "number", "default": 0, "description": "0-1. 0=off, 0.45=recommended" }
+        "preserveLastN": { "type": "number", "default": 4, "description": "Protect the most recent N messages from pruning. Marker-protected messages are preserved regardless of recency." },
+        "scoreThreshold": { "type": "number", "default": 0.45, "description": "0-1. 0=off, 0.45=recommended. High-score messages are preserved even inside old blocks." }
       }
     },
     "commands": {

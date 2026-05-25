@@ -9,7 +9,7 @@ export interface OutputFilterConfig {
   teeSaveOnTruncate: boolean
   /** User-defined custom filters */
   customFilters: CustomFilter[]
-  /** Tool names to skip filtering (e.g., ["task"] for sub-agent output) */
+  /** Tool names to skip filtering. Safety guard: "task" is always enforced internally. */
   skipTools: string[]
 }
 
@@ -43,7 +43,7 @@ export interface SemanticConfig {
   protectErrors: boolean
   /** Minimum text length to compress (chars) */
   minLengthChars: number
-  /** Tool names to skip compression (e.g., ["task"] for sub-agent output) */
+  /** Tool names to skip compression. Safety guard: "task" is always enforced internally. */
   skipTools: string[]
 }
 
@@ -64,7 +64,7 @@ export interface SummarizationConfig {
   summaryBuffer: boolean
   /** Show compression info in output */
   showCompression: boolean
-  /** Preserve last N messages from pruning to keep recent context intact (0 = disable) */
+  /** Preserve last N messages from pruning to keep recent context intact (0 = disable recency protection) */
   preserveLastN: number
   /** Multi-signal importance scoring threshold (0-1). 0 = disabled, 0.45 = recommended. */
   scoreThreshold: number
