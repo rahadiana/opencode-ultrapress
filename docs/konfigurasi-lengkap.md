@@ -11,7 +11,8 @@ UltraPress works *out-of-the-box* with a **Balanced default profile** (recommend
 ```jsonc
 {
   "enabled": true,           // Master switch
-  "notification": "minimal", // Notification level
+  "enableDebug": false,      // Default: silent console logs
+  "notification": "minimal", // Log level when enableDebug=true
 
   // LAYER 1 — Output Filtering
   "outputFilter": { /* ... */ },
@@ -34,7 +35,8 @@ UltraPress works *out-of-the-box* with a **Balanced default profile** (recommend
 | Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `enabled` | `boolean` | `true` | Master switch. `false` = disable entire plugin. |
-| `notification` | `"off"` / `"minimal"` / `"detailed"` | `"minimal"` | How detailed UltraPress logs are in the OpenCode console. |
+| `enableDebug` | `boolean` | `false` | Enable UltraPress logs in OpenCode console. Default is silent. |
+| `notification` | `"off"` / `"minimal"` / `"detailed"` | `"minimal"` | Log verbosity, used only when `enableDebug: true`. |
 
 ---
 
@@ -663,7 +665,7 @@ interface CleanupConfig {
 | Plugin not active | `enabled: false` | Set `"enabled": true` |
 | Important messages deleted | `preserveLastN` too small | Increase to 5-7 |
 | OpenCode slow | `mlm` mode + large model | Switch to `"mode": "nlp"` |
-| Too many notifications | `notification: "detailed"` | Set to `"minimal"` or `"off"` |
+| Too many notifications | `enableDebug: true` + `notification: "detailed"` | Set `"enableDebug": false` (recommended) or lower `notification` |
 | Errors never disappear | `purgeErrors.turns` too large | Lower to 2-3 |
 | All tool calls dedup'd | Stateful commands also get dedup'd | Built-in already handles this. If any are missed, report. |
 

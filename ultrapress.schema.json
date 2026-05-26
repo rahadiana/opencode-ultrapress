@@ -10,10 +10,15 @@
       "description": "Master switch for the entire plugin.",
       "default": true
     },
+    "enableDebug": {
+      "type": "boolean",
+      "description": "Enable UltraPress console logs. When false, logs are fully silent.",
+      "default": false
+    },
     "notification": {
       "type": "string",
       "enum": ["off", "minimal", "detailed"],
-      "description": "Log verbosity level.",
+      "description": "Log verbosity level (used only when enableDebug=true).",
       "default": "minimal"
     },
     "outputFilter": {

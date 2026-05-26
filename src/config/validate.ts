@@ -127,9 +127,15 @@ function sanitizeCleanup(value: unknown, fallback: CleanupConfig): CleanupConfig
 export function sanitizeConfig(userConfig: unknown): UltraPressConfig {
   const input = isRecord(userConfig) ? userConfig : {}
   const commands = isRecord(input.commands) ? input.commands : {}
+  const enableDebugValue = typeof input.enableDebug === "boolean"
+    ? input.enableDebug
+    : typeof input.enable_debug === "boolean"
+      ? input.enable_debug
+      : DEFAULT_CONFIG.enableDebug
 
   return {
     enabled: asBoolean(input.enabled, DEFAULT_CONFIG.enabled),
+    enableDebug: enableDebugValue,
     outputFilter: sanitizeOutputFilter(input.outputFilter, DEFAULT_CONFIG.outputFilter),
     semantic: sanitizeSemantic(input.semantic, DEFAULT_CONFIG.semantic),
     summarization: sanitizeSummarization(input.summarization, DEFAULT_CONFIG.summarization),

@@ -90,7 +90,7 @@ export async function server(ctx: any): Promise<Hooks> {
 
   config = baseConfig
   stats = createSessionStats()
-  logger.setLogLevel(config.notification)
+  logger.setLogLevel(config.enableDebug ? config.notification : "off")
 
   // Reset compression state for clean session start (prevents ID collisions across sessions)
   resetCompressionState()

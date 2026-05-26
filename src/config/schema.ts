@@ -87,6 +87,8 @@ export type NotificationLevel = "off" | "minimal" | "detailed"
 export interface UltraPressConfig {
   /** Master switch */
   enabled: boolean
+  /** Enable console logging/debug output */
+  enableDebug: boolean
   /** Layer 1 */
   outputFilter: OutputFilterConfig
   /** Layer 2 */

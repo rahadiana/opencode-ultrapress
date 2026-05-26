@@ -2,6 +2,7 @@ import type { UltraPressConfig, SessionStats } from "./schema.js"
 
 export const DEFAULT_CONFIG: UltraPressConfig = {
   enabled: true,
+  enableDebug: false,
 
   // Layer 1 - Output Filter
   outputFilter: {
@@ -49,7 +50,7 @@ export const DEFAULT_CONFIG: UltraPressConfig = {
   // Slash commands
   commands: { enabled: true },
 
-  // Notifications
+  // Notifications (used only when enableDebug=true)
   notification: "minimal",
 }
 

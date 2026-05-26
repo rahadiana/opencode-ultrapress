@@ -1,6 +1,7 @@
 {
   "enabled": true,
-  "notification": "minimal", // Pilihan: "off", "minimal", "detailed"
+  "enableDebug": false, // Default: log console mati. Set true untuk tampilkan log.
+  "notification": "minimal", // Dipakai hanya saat enableDebug=true. Pilihan: "off", "minimal", "detailed"
 
   // LAYER 1: Output Filtering (RTK Engine)
   "outputFilter": {
