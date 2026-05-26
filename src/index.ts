@@ -72,6 +72,7 @@ export async function server(ctx: any): Promise<Hooks> {
     const strippedContent = fileContent.replace(/^\s*\/\/.*$/gm, "")
     const externalConfig = JSON.parse(strippedContent)
     baseConfig = sanitizeConfig(externalConfig)
+    logger.setLogLevel(baseConfig.enableDebug ? baseConfig.notification : "off")
     logger.info(`[Config] Loaded dedicated config from ${configPath}`)
   } catch (e: any) {
     if (e.code === "ENOENT") {
@@ -79,18 +80,20 @@ export async function server(ctx: any): Promise<Hooks> {
        try {
           await mkdir(configDir, { recursive: true })
           await writeFile(configPath, JSON.stringify(baseConfig, null, 2), "utf-8")
+          logger.setLogLevel(baseConfig.enableDebug ? baseConfig.notification : "off")
           logger.info(`[Config] Created best-practice configuration at ${configPath}`)
        } catch (writeErr) {
+          logger.setLogLevel(baseConfig.enableDebug ? baseConfig.notification : "off")
           logger.debug("[Config] Failed to auto-create config file, using in-memory defaults.")
        }
     } else {
+       logger.setLogLevel(baseConfig.enableDebug ? baseConfig.notification : "off")
        logger.debug(`[Config] Error reading ultrapress.json, using defaults.`)
     }
   }
 
   config = baseConfig
   stats = createSessionStats()
-  logger.setLogLevel(config.enableDebug ? config.notification : "off")
 
   // Reset compression state for clean session start (prevents ID collisions across sessions)
   resetCompressionState()
