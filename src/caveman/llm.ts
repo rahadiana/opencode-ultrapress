@@ -16,6 +16,7 @@
 import type { NLPResult } from "./nlp.js"
 import { estimateTokens } from "../utils/token-count.js"
 import { extractCodeBlocks, restoreCodeBlocks, verifyPlaceholders } from "./facts.js"
+import * as logger from "../utils/logger.js"
 
 // ─── Configuration ──────────────────────────────────────────────────────
 
@@ -45,7 +46,7 @@ async function loadModel(modelName: string): Promise<any> {
       pipelineInstance = null
     }
 
-    console.info(`UltraPress [LLM]: Loading summarization model (${modelName})...`)
+    logger.info(`[LLM] Loading summarization model (${modelName})...`)
 
     // Limit ONNX Runtime threads to prevent excessive Bun worker processes
     process.env.ORT_NUM_THREADS = process.env.ORT_NUM_THREADS || "1"
@@ -60,7 +61,7 @@ async function loadModel(modelName: string): Promise<any> {
 
     pipelineInstance = await loadPipeline("summarization", modelName, { dtype: "q8" })
     currentModelName = modelName
-    console.info("UltraPress [LLM]: Summarization model loaded.")
+    logger.info("[LLM] Summarization model loaded.")
   }
 
   // Clear any existing idle timeout when model is actively used
@@ -219,7 +220,7 @@ export async function compressLLM(
       method: "llm-local",
     }
   } catch (e) {
-    console.warn("UltraPress [LLM]: compression failed, falling back to NLP.", e)
+    logger.warn("[LLM] Compression failed, falling back to NLP.", e)
     const { compressNLP } = await import("./nlp.js")
     return {
       ...compressNLP(text, { protectCodeBlocks }),

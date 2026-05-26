@@ -16,6 +16,7 @@
 import type { NLPResult } from "./nlp.js"
 import { estimateTokens } from "../utils/token-count.js"
 import { extractCodeBlocks, restoreCodeBlocks, verifyPlaceholders } from "./facts.js"
+import * as logger from "../utils/logger.js"
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -94,7 +95,7 @@ export async function loadModel(modelName: string): Promise<any> {
       pipelineInstance = null
     }
 
-    console.info(`UltraPress [MLM]: Loading model (${modelName})...`)
+    logger.info(`[MLM] Loading model (${modelName})...`)
 
     // Limit ONNX Runtime threads to prevent excessive Bun worker processes
     // ORT uses one thread per worker; default = all CPU cores → many processes on Windows
@@ -110,7 +111,7 @@ export async function loadModel(modelName: string): Promise<any> {
 
     pipelineInstance = await loadPipeline("feature-extraction", modelName, { dtype: "q8" })
     currentModelName = modelName
-    console.info("UltraPress [MLM]: Model loaded.")
+    logger.info("[MLM] Model loaded.")
   }
 
   // Clear any existing idle timeout when model is actively used
@@ -282,7 +283,7 @@ export async function compressMLM(
       method: "mlm-ai",
     }
   } catch (e) {
-    console.warn("UltraPress [MLM]: compression failed, falling back to NLP.", e)
+    logger.warn("[MLM] Compression failed, falling back to NLP.", e)
     const { compressNLP } = await import("./nlp.js")
     return {
       ...compressNLP(text, { protectCodeBlocks }),
