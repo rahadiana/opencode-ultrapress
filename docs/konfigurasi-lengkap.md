@@ -379,7 +379,7 @@ UltraPress adds several `/up` commands to OpenCode for runtime control:
 | `/up pause` | Pause UltraPress (temporarily disable all layers) |
 | `/up resume` | Resume UltraPress after pause |
 | `/up expand` | Expand the last compressed block |
-| `/up compress` | Manually trigger compression on the current session |
+| `/up compress` | Enable/verify summarization mode and show compression status/guide |
 | `/up config` | Show current configuration (sanitized) |
 | `/up prune` | Manually trigger message pruning |
 

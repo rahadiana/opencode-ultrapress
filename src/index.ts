@@ -24,7 +24,11 @@ import { resetLLMPipeline } from "./caveman/llm.js"
 let config: UltraPressConfig
 let stats: SessionStats
 const sessionsPendingContextNote = new Set<string>()
+const sessionsSuppressCommandFollowup = new Set<string>()
 const GLOBAL_CLEANUP_REGISTRY_KEY = "__ultrapressCleanupState__" as const
+// NOTE: Do NOT throw to "prevent" command fallthrough. Newer OpenCode versions
+// show errors thrown from hooks as visible UI errors.
+// Instead, clear output.parts to prevent AI from receiving the command.
 
 type CleanupState = {
   registered: boolean
@@ -149,31 +153,84 @@ export async function server(ctx: any): Promise<Hooks> {
      * Native Slash Command Interceptor
      * OpenCode uses this hook to evaluate /up (derived from opencode-ultrapress package name)
      */
-    "command.execute.before": async (input: any, output: any) => {
-       try {
-          if (input.command === "up") {
-             const { response, configMutated } = handleSlashCommand(`/up ${input.arguments || ""}`, stats, config)
-             output.parts = output.parts || []
-             output.parts.push({
-                type: "text",
-                text: `${response}`
-             })
-             // Persist config mutations to disk so they survive restart
-             if (configMutated) {
-                try {
-                   await writeFile(configPath, JSON.stringify(config, null, 2), "utf-8")
-                   logger.info("[Config] Saved updated config to disk.")
-                } catch (writeErr) {
-                   logger.warn(`[Config] Failed to persist config: ${writeErr}`)
-                }
-             }
+     "command.execute.before": async (input: any, output: any) => {
+        const commandName = typeof input.command === "string" ? input.command.trim().toLowerCase() : ""
+        const commandArgs = typeof input.arguments === "string" ? input.arguments : ""
+
+        const fallbackCandidates = [
+          typeof input.text === "string" ? input.text.trim() : "",
+          typeof input.input === "string" ? input.input.trim() : "",
+          typeof input.raw === "string" ? input.raw.trim() : "",
+        ].filter(Boolean)
+
+        const directMatch = commandName === "up" || commandName === "/up"
+        const fallbackMatch = fallbackCandidates.find((value) => /^\/up(\s|$)/i.test(value))
+
+        if (!(directMatch || fallbackMatch)) {
+          return
+        }
+
+        const suppressCommandOutput = () => {
+          if (Array.isArray(output?.parts)) {
+            // Clear output parts so the AI receives nothing — no fallthrough.
+            // Must mutate in-place because OpenCode passes a shared array reference.
+            output.parts.length = 0
+            return
           }
-       } catch (err) {
+
+          logger.warn("[Command] output.parts is not an array; cannot suppress command payload safely.")
+        }
+
+        // Suppress immediately once /up is matched to avoid any fallthrough path.
+        suppressCommandOutput()
+
+        const normalizedCommand = directMatch
+          ? `/up ${commandArgs}`.trim()
+          : fallbackMatch
+
+        try {
+          logger.info(`[Command] Intercepted UltraPress command: ${normalizedCommand}`)
+
+          const { response, configMutated } = handleSlashCommand(normalizedCommand, stats, config)
+
+          // Put response directly in output.parts.
+          // [analyze-mode] injections from other plugins are now stripped by
+          // the experimental.chat.messages.transform hook below.
+          // Put response in output.parts with a strong system-level instruction.
+          // Models are trained to respect [STM] (system-to-model) directives.
+          if (!Array.isArray(output.parts)) output.parts = []
+          output.parts.push({
+            type: "text",
+            text: [
+              "[STM: UltraPress handled /up. The model must not generate any response text. End output.]",
+              "",
+              response,
+            ].join("\n"),
+          })
+
+          if (input.sessionID) {
+            sessionsSuppressCommandFollowup.add(input.sessionID)
+          }
+
+          // Persist config mutations to disk so they survive restart
+          if (configMutated) {
+            try {
+              await writeFile(configPath, JSON.stringify(config, null, 2), "utf-8")
+              logger.info("[Config] Saved updated config to disk.")
+            } catch (writeErr) {
+              logger.warn(`[Config] Failed to persist config: ${writeErr}`)
+            }
+          }
+        } catch (err) {
           logger.error(`[Command] /up failed: ${err}`)
-          output.parts = output.parts || []
-          output.parts.push({ type: "text", text: "UltraPress: Command failed. Check logs for details." })
-       }
-    },
+          if (!Array.isArray(output.parts)) output.parts = []
+          output.parts.push({
+            type: "text",
+            text: "[UltraPress command failed. No response needed — check logs.]",
+          })
+        }
+      },
+
 
     // ─── HOOKS ──────────────────────────────────────────
 
@@ -224,10 +281,33 @@ export async function server(ctx: any): Promise<Hooks> {
      */
     "chat.message": async (input: any, output: any) => {
        try {
-         const sessionID = input.sessionID
+          const sessionID = input.sessionID
 
-          // SYNC HISTORY + REAL TOKENS: First call fetches real token counts
-          // from OpenCode API (AssistantMessage.tokens) and estimates for fallback.
+          // Suppress one immediate assistant follow-up after /up command handling.
+          // This prevents the model from appending unrelated text (e.g. leaked
+          // orchestration instructions) after UltraPress already produced output.
+          if (sessionID && sessionsSuppressCommandFollowup.has(sessionID) && Array.isArray(output?.parts)) {
+             const textPart = output.parts.find((p: any) => p?.type === "text" && typeof p.text === "string")
+             const text = textPart?.text ?? ""
+             const role = output?.message?.role || output?.message?.info?.role
+             const isUltraPressCommandPayload = typeof text === "string" && text.startsWith("[STM: UltraPress handled /up")
+
+             // If we have moved on to a normal user message, drop stale suppress flag.
+             if (!isUltraPressCommandPayload && role === "user") {
+                sessionsSuppressCommandFollowup.delete(sessionID)
+             }
+
+             if (!isUltraPressCommandPayload && role === "assistant") {
+                output.parts.length = 0
+                output.parts.push({ type: "text", text: "\u200b" })
+                sessionsSuppressCommandFollowup.delete(sessionID)
+                logger.info("[Command] Suppressed immediate assistant follow-up after /up.")
+                return
+             }
+          }
+
+           // SYNC HISTORY + REAL TOKENS: First call fetches real token counts
+           // from OpenCode API (AssistantMessage.tokens) and estimates for fallback.
           if (stats.totalTokensRaw === 0 && sessionID) {
              try {
                 const msgs: Array<{ info: any; parts: Array<any> }> = await ctx.client.session.messages({ id: sessionID })
@@ -271,7 +351,7 @@ export async function server(ctx: any): Promise<Hooks> {
 
            // ─── L3: Apply pending pruning on context messages ───
            // Convert output.message (each msg has { info, parts }) to MessageLike[] for pruning
-           if (output.message && Array.isArray(output.message) && config.summarization.enabled) {
+            if (output.message && Array.isArray(output.message) && config.summarization.enabled) {
               const prunableMessages: Array<{ id: string; role: string; parts?: any[] }> =
                  output.message.map((m: any) => ({
                     id: m.info?.id || m.id,
@@ -279,13 +359,13 @@ export async function server(ctx: any): Promise<Hooks> {
                     parts: m.parts || [],
                  }))
 
-              const { prunedCount } = applyPruning(prunableMessages, config.summarization.preserveLastN, config.summarization.scoreThreshold,
+              const { prunedCount, estimatedTokensSaved } = applyPruning(prunableMessages, config.summarization.preserveLastN, config.summarization.scoreThreshold,
                 (blockId, removedMessages) => {
                   storeOriginalContent(blockId, removedMessages)
                 }
               )
 
-               if (prunedCount > 0) {
+                if (prunedCount > 0) {
                   // Rebuild output.message from pruned array
                   // Map back: preserve original { info, parts } for kept messages,
                   // create synthetic entries for summary messages (which have .content)
@@ -305,13 +385,19 @@ export async function server(ctx: any): Promise<Hooks> {
                  }
                  output.message.length = 0
                  output.message.push(...newMessages)
-                  stats.savedByLayer.summarization += prunedCount
+                  if (estimatedTokensSaved > 0) {
+                    stats.savedByLayer.summarization += estimatedTokensSaved
+                  }
                   resetContextTokens(0) // Reset context estimate after pruning
                   if (sessionID) {
                     sessionsPendingContextNote.add(sessionID)
                   }
-                  logger.info(`[L3] Pruned ${prunedCount} messages from context.`)
-               }
+                  logger.info(`[L3] Pruned ${prunedCount} messages from context (estimated ${estimatedTokensSaved} tokens saved).`)
+                } else {
+                   logger.debug("[L3] No messages pruned this turn (no eligible compression blocks or protected content only).")
+                }
+            } else if (config.summarization.enabled) {
+               logger.debug("[L3] Pruning skipped this turn: output.message not available or not an array.")
             }
 
             // Layer 2 + 3: Semantic Compression & DCP Nudge
@@ -387,11 +473,37 @@ export async function server(ctx: any): Promise<Hooks> {
        }
     },
 
-    /**
-     * Configuration Hook
-     * This is where we register our slash command so it appears in the UI
-     */
-    config: async (opencodeConfig: any) => {
+     /**
+      * experimental.chat.messages.transform
+      * Fires just before messages are sent to the LLM.
+      * UltraPress loads last in the plugin list, so this runs AFTER
+      * oh-my-openagent's transform — allowing us to undo [analyze-mode]
+      * injection on /up command messages.
+      */
+      "experimental.chat.messages.transform": async (_input: {}, output: { messages: any[] }) => {
+         if (!Array.isArray(output?.messages)) return
+
+         for (const msg of output.messages) {
+            if (!Array.isArray(msg?.parts)) continue
+
+            for (let i = 0; i < msg.parts.length; i++) {
+               const part = msg.parts[i]
+               if (part?.type !== "text" || typeof part.text !== "string") continue
+
+               // Strip [analyze-mode] / [search-mode] blocks injected by oh-my-openagent.
+               part.text = part.text.replace(
+                  /\[(?:analyze|search)-mode\][\s\S]*?[\r\n]+---[\s]*/gi,
+                  ""
+               ).trim()
+            }
+         }
+      },
+
+     /**
+      * Configuration Hook
+      * This is where we register our slash command so it appears in the UI
+      */
+     config: async (opencodeConfig: any) => {
        opencodeConfig.command = opencodeConfig.command || {}
        opencodeConfig.command["up"] = {
           template: "",

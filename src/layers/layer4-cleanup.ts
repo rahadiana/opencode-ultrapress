@@ -6,6 +6,7 @@
 import type { CleanupConfig, SessionStats } from "../config/schema.js"
 import { deduplicateToolOutput } from "../cleanup/dedup.js"
 import { registerToolResult, incrementTurnAndGetPurgeable } from "../cleanup/purge-errors.js"
+import { estimateTokens } from "../utils/token-count.js"
 import * as logger from "../utils/logger.js"
 
 export interface Layer4Deps {
@@ -32,9 +33,16 @@ export function applyCleanup(
   if (deps.config.deduplication.enabled && !isError) {
      const { isDuplicate, output: dedupedOutput } = deduplicateToolOutput(toolName, args, output, messageId)
      if (isDuplicate) {
-        finalOutput = dedupedOutput
-        deps.stats.deduplicationCount++
-        logger.debug(`[L4] Deduplicated tool call: ${toolName}`)
+        const originalTokens = estimateTokens(finalOutput)
+        const dedupedTokens = estimateTokens(dedupedOutput)
+        const saved = originalTokens - dedupedTokens
+
+         finalOutput = dedupedOutput
+         deps.stats.deduplicationCount++
+        if (saved > 0) {
+          deps.stats.savedByLayer.cleanup += saved
+        }
+         logger.debug(`[L4] Deduplicated tool call: ${toolName}`)
      }
   }
 

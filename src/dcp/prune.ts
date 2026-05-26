@@ -12,6 +12,7 @@ import * as CompressState from "./compress-state.js"
 import { isProtectedTool } from "./protected-content.js"
 import { scoreMessage, type MessageMeta } from "./scorer.js"
 import * as logger from "../utils/logger.js"
+import { estimateTokens } from "../utils/token-count.js"
 
 export interface MessageLike {
   id: string
@@ -83,9 +84,9 @@ export function applyPruning(
   preserveLastN: number = 0,
   scoreThreshold: number = 0,
   onBlockPruned?: (blockId: number, removedMessages: MessageLike[]) => void,
-): { prunedCount: number; injectedCount: number } {
+): { prunedCount: number; injectedCount: number; estimatedTokensSaved: number } {
   const blocks = CompressState.getAllBlocks()
-  if (blocks.length === 0) return { prunedCount: 0, injectedCount: 0 }
+  if (blocks.length === 0) return { prunedCount: 0, injectedCount: 0, estimatedTokensSaved: 0 }
 
   // Calculate cutoff index: messages at or after this index are preserved
   const cutoffIdx = preserveLastN > 0 ? Math.max(0, messages.length - preserveLastN) : 0
@@ -109,17 +110,19 @@ export function applyPruning(
 
   let prunedCount = 0
   let injectedCount = 0
+  let estimatedTokensSaved = 0
 
   for (const block of blocks) {
     const result = pruneBlock(messages, block, cutoffIdx, scoreKeepIds)
     prunedCount += result.removed
     injectedCount += result.injected
+    estimatedTokensSaved += result.estimatedSavedTokens
     if (result.removed > 0 && onBlockPruned && result.removedMessages) {
       onBlockPruned(block.blockId, result.removedMessages)
     }
   }
 
-  return { prunedCount, injectedCount }
+  return { prunedCount, injectedCount, estimatedTokensSaved }
 }
 
 function pruneBlock(
@@ -127,14 +130,15 @@ function pruneBlock(
   block: CompressionBlock,
   cutoffIdx: number = 0,
   scoreKeepIds?: Set<string>,
-): { removed: number; injected: number; removedMessages?: MessageLike[] } {
+): { removed: number; injected: number; removedMessages?: MessageLike[]; estimatedSavedTokens: number } {
   let injectedCount = 0
+  let estimatedSavedTokens = 0
 
   const startIdx = messages.findIndex(m => m.id === block.startId)
   const endIdx = messages.findIndex(m => m.id === block.endId)
 
   if (startIdx === -1 || endIdx === -1 || startIdx > endIdx) {
-    return { removed: 0, injected: 0 }
+    return { removed: 0, injected: 0, estimatedSavedTokens: 0 }
   }
 
   // If scoring is active, build a keep set from block's messages
@@ -145,7 +149,7 @@ function pruneBlock(
   if (cutoffIdx > 0 && endIdx >= cutoffIdx) {
     if (!scoreKeepIds || scoreKeepIds.size === 0) {
       // No scoring — skip entire block (legacy behavior)
-      return { removed: 0, injected: 0 }
+      return { removed: 0, injected: 0, estimatedSavedTokens: 0 }
     }
     // With scoring: we can still prune messages within this block
     // as long as they're below the score threshold
@@ -158,7 +162,9 @@ function pruneBlock(
     return true
   })
 
-  if (toRemove.length === 0) return { removed: 0, injected: 0 }
+  if (toRemove.length === 0) return { removed: 0, injected: 0, estimatedSavedTokens: 0 }
+
+  const removedTokenEstimate = toRemove.reduce((sum, msg) => sum + estimateTokens(getMessageText(msg)), 0)
 
   const removeIds = new Set(toRemove.map(m => m.id))
   const result = messages.filter(m => !removeIds.has(m.id))
@@ -169,6 +175,8 @@ function pruneBlock(
     role: "system",
     content: `[Compressed summary: ${block.topic}] ${effectiveSummary}`,
   }
+  const summaryTokenEstimate = estimateTokens(summaryMsg.content || "")
+  estimatedSavedTokens = Math.max(0, removedTokenEstimate - summaryTokenEstimate)
 
   const insertAfter = result.findIndex(m => m.id === block.startId)
   if (insertAfter >= 0) {
@@ -179,7 +187,7 @@ function pruneBlock(
   messages.length = 0
   messages.push(...result)
 
-  return { removed: toRemove.length, injected: injectedCount, removedMessages: toRemove }
+  return { removed: toRemove.length, injected: injectedCount, removedMessages: toRemove, estimatedSavedTokens }
 }
 
 /**

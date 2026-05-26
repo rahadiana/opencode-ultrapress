@@ -114,10 +114,7 @@ function buildContextResponse(stats: SessionStats, config: UltraPressConfig): st
 Context Limit  : ${config.summarization.maxContextLimit.toLocaleString()} tokens
 Target After   : ${config.summarization.minContextLimit.toLocaleString()} tokens
 Nudge Every    : ${config.summarization.nudgeFrequency} turns
-Session Uptime : ${minutes}m ${seconds}s${realLine}
-
-Type '/up compress' to force summarization now.
-Type '/up stats' to see savings breakdown.`
+Session Uptime : ${minutes}m ${seconds}s${realLine}`
 }
 
 function buildCompressResponse(stats: SessionStats, config: UltraPressConfig): string {
@@ -135,28 +132,27 @@ function buildCompressResponse(stats: SessionStats, config: UltraPressConfig): s
    ].join("\n")
 
    const savingsLine = anySaved > 0
-      ? `\nSaved so far this session: ${formatTokens(anySaved)} tokens.`
-      : `\nNo tokens compressed yet — plugin just started or no heavy tools have run.\nRun 'git diff' or 'npm install' then check '/up stats' to see compression in action.`
+       ? `\nSaved so far this session: ${formatTokens(anySaved)} tokens.`
+       : `\nNo tokens compressed yet — plugin just started or no heavy tools have run.\nHint: use '/up stats' after a tool run to see compression activity.`
 
    const noteLines = !wasSummarizationEnabled
       ? `\n⚠️  L3 was disabled. It has been re-enabled for this session.`
       : ""
 
-   return `🗜️  UltraPress: Force Compress
+   return `🗜️  UltraPress: Compression Status
 ───────────────────────────────────
 All compression layers are active:\n${statusLines}${savingsLine}${noteLines}
 
-Type '/up stats' to see real-time token savings breakdown.`
+ℹ️  Note: '/up compress' enables/validates summarization mode and shows status.
+    Actual pruning runs on the next chat turn when eligible compression blocks exist.
+
+[Info: '/up stats' shows real-time token savings.]`
 }
 
 function buildHelpResponse(): string {
   return `📦 UltraPress — Token Compression Plugin
 ───────────────────────────────────
-/up stats              - Show token savings breakdown
-/up context            - Show context window status
-/up compress           - Force summarization + show layer status
-/up mode <nlp|mlm|llm> - Change L2 semantic mode
-/up filter <on|off>    - Toggle L1 output filter
-/up manual <on|off>    - Toggle auto-summarization
-`
+Available commands: stats, context, compress, mode, filter, manual
+
+Use /up <command> to interact. All output is handled by UltraPress.`
 }

@@ -236,9 +236,11 @@ describe("L4 — applyCleanup integration", () => {
   test("applyCleanup: dedup increments counter", () => {
     const stats = makeStats()
     const config = makeConfig()
-    applyCleanup("bash", { command: "npm test" }, "test output", false, "msg_001", { config, stats })
-    applyCleanup("bash", { command: "npm test" }, "test output", false, "msg_002", { config, stats })
+    const longOutput = "test output ".repeat(100)
+    applyCleanup("bash", { command: "npm test" }, longOutput, false, "msg_001", { config, stats })
+    applyCleanup("bash", { command: "npm test" }, longOutput, false, "msg_002", { config, stats })
     expect(stats.deduplicationCount).toBe(1)
+    expect(stats.savedByLayer.cleanup).toBeGreaterThan(0)
   })
 
   test("applyCleanup: dedup disabled", () => {
