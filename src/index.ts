@@ -501,6 +501,18 @@ export async function server(ctx: any): Promise<Hooks> {
                   /\[(?:analyze|search)-mode\][\s\S]*?[\r\n]+---[\s]*/gi,
                   ""
                ).trim()
+
+               // Strip leaked orchestration boilerplate (MANDATORY delegate_task params, ANALYSIS MODE, etc.)
+               // that oh-my-openagent injects into the system prompt and the model echoes back.
+               part.text = part.text.replace(
+                  /MANDATORY delegate_task params[\s\S]*?run_in_background when calling delegate_task\.\s*/gi,
+                  ""
+               ).trim()
+
+               part.text = part.text.replace(
+                  /(?:ANALYSIS\s+MODE|SEARCH\s+MODE)[\s\S]*?(?:proceed|synthesize findings)/gi,
+                  ""
+               ).trim()
             }
          }
       },
