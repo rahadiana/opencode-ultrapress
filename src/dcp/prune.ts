@@ -16,9 +16,10 @@ import { estimateTokens } from "../utils/token-count.js"
 
 export interface MessageLike {
   id: string
-  role: string
+  role?: string
   parts?: any[]
   content?: string
+  info?: { id?: string; role?: string }
 }
 
 const IMPORTANT_CONTEXT_MARKERS = [
@@ -59,19 +60,35 @@ function hasImportantMarker(msg: MessageLike): boolean {
 function toMeta(msg: MessageLike, index: number, total: number): MessageMeta {
   let tool: string | undefined
   let content = msg.content || ""
+  const msgId = msg.info?.id || msg.id
+  const msgRole = msg.info?.role || msg.role || "unknown"
   if (msg.parts) {
     for (const part of msg.parts) {
       if (part.type === "tool" && part.tool) tool = part.tool
       if (part.type === "text" && !content) content = part.text || content
     }
   }
-  return { id: msg.id, role: msg.role, tool, content, index, totalMessages: total }
+  return { id: msgId, role: msgRole, tool, content, index, totalMessages: total }
 }
 
 // ─── Main Pruning Entry ─────────────────────────────────────────────────
 
+// ─── Already-pruned block tracking ──────────────────────────────────────
+const prunedBlockIds = new Set<number>()
+
+/**
+ * Reset pruning state (for testing / session reset).
+ */
+export function resetPruneState(): void {
+  prunedBlockIds.clear()
+}
+
 /**
  * Prune compressed messages from the messages array.
+ *
+ * Uses in-place mutation (messages.length = 0; messages.push(...)) which
+ * preserves the array reference OpenCode's pipeline holds — unlike
+ * reassigning output.messages which would break the LLM pipeline.
  *
  * @param preserveLastN - Keep last N messages safe from pruning (0 = disable)
  * @param scoreThreshold - If > 0, use multi-signal scoring. Messages scoring
@@ -113,16 +130,76 @@ export function applyPruning(
   let estimatedTokensSaved = 0
 
   for (const block of blocks) {
+    // Skip blocks that have already been pruned
+    if (prunedBlockIds.has(block.blockId)) continue
+
     const result = pruneBlock(messages, block, cutoffIdx, scoreKeepIds)
     prunedCount += result.removed
     injectedCount += result.injected
     estimatedTokensSaved += result.estimatedSavedTokens
-    if (result.removed > 0 && onBlockPruned && result.removedMessages) {
-      onBlockPruned(block.blockId, result.removedMessages)
+    if (result.removed > 0) {
+      prunedBlockIds.add(block.blockId)
+      if (onBlockPruned && result.removedMessages) {
+        onBlockPruned(block.blockId, result.removedMessages)
+      }
     }
   }
 
   return { prunedCount, injectedCount, estimatedTokensSaved }
+}
+
+/**
+ * Find the last user message before a given index, to copy info from
+ * for the synthetic summary message.
+ */
+function findLastUserMessage(messages: MessageLike[], beforeIdx: number): MessageLike | undefined {
+  for (let i = beforeIdx - 1; i >= 0; i--) {
+    const role = messages[i].info?.role || messages[i].role
+    if (role === "user") return messages[i]
+  }
+  return undefined
+}
+
+/**
+ * Create a proper synthetic user message that OpenCode's pipeline can handle.
+ * Critical: uses "user" role with proper info object — matches the format
+ * that the opencode-dynamic-context-pruning plugin uses successfully.
+ */
+function createSummaryMessage(block: CompressionBlock, template?: MessageLike): MessageLike {
+  const effectiveSummary = CompressState.getEffectiveSummary(block.blockId)
+  const summaryText = `[Compressed summary: ${block.topic}] ${effectiveSummary}`
+  const now = Date.now()
+
+  const msgId = `__dcp_summary_${block.blockId}__`
+  const partId = `__prt_dcp_summary_${block.blockId}__`
+
+  const info: Record<string, any> = {
+    id: msgId,
+    role: "user",
+    time: { created: now },
+  }
+
+  // Copy session info from template if available
+  if (template?.info) {
+    const tInfo = template.info as Record<string, any>
+    if (tInfo.sessionID) info.sessionID = tInfo.sessionID
+    if (tInfo.agent) info.agent = tInfo.agent
+    if (tInfo.model) info.model = tInfo.model
+  }
+
+  return {
+    id: msgId,
+    content: summaryText,
+    info,
+    parts: [
+      {
+        id: partId,
+        messageID: msgId,
+        type: "text" as const,
+        text: summaryText,
+      },
+    ],
+  }
 }
 
 function pruneBlock(
@@ -134,8 +211,9 @@ function pruneBlock(
   let injectedCount = 0
   let estimatedSavedTokens = 0
 
-  const startIdx = messages.findIndex(m => m.id === block.startId)
-  const endIdx = messages.findIndex(m => m.id === block.endId)
+  const resolveId = (m: MessageLike) => m.info?.id || m.id
+  const startIdx = messages.findIndex(m => resolveId(m) === block.startId)
+  const endIdx = messages.findIndex(m => resolveId(m) === block.endId)
 
   if (startIdx === -1 || endIdx === -1 || startIdx > endIdx) {
     return { removed: 0, injected: 0, estimatedSavedTokens: 0 }
@@ -155,35 +233,43 @@ function pruneBlock(
     // as long as they're below the score threshold
   }
 
-  const rangeMessages = messages.slice(startIdx + 1, endIdx)
-  const toRemove = rangeMessages.filter(m => {
-    if (isProtectedMessage(m)) return false
-    if (blockKeepIds.has(m.id)) return false // scorer says keep
-    return true
-  })
+  // Use block's directMessageIds (not index range) to find removable messages.
+  // Index-based slicing (slice(startIdx+1, endIdx)) fails for 1-2 message blocks
+  // where start and end are adjacent/identical — range is empty, nothing gets pruned.
+  // Using message IDs directly works for ANY block size.
+  const blockIdSet = new Set(block.directMessageIds)
+  blockIdSet.delete(block.startId) // Keep startId as anchor for summary insertion
+
+  const toRemove: MessageLike[] = []
+  for (const msg of messages) {
+    const mid = msg.info?.id || msg.id
+    if (!blockIdSet.has(mid)) continue
+    if (isProtectedMessage(msg)) continue
+    if (blockKeepIds.has(mid)) continue
+    toRemove.push(msg)
+  }
 
   if (toRemove.length === 0) return { removed: 0, injected: 0, estimatedSavedTokens: 0 }
 
   const removedTokenEstimate = toRemove.reduce((sum, msg) => sum + estimateTokens(getMessageText(msg)), 0)
 
-  const removeIds = new Set(toRemove.map(m => m.id))
-  const result = messages.filter(m => !removeIds.has(m.id))
+  const removeIds = new Set(toRemove.map(m => m.info?.id || m.id))
+  const result = messages.filter(m => !removeIds.has(m.info?.id || m.id))
 
-  const effectiveSummary = CompressState.getEffectiveSummary(block.blockId)
-  const summaryMsg: MessageLike = {
-    id: `__dcp_summary_${block.blockId}__`,
-    role: "system",
-    content: `[Compressed summary: ${block.topic}] ${effectiveSummary}`,
-  }
-  const summaryTokenEstimate = estimateTokens(summaryMsg.content || "")
+  // Create synthetic user message with proper OpenCode format
+  const userTemplate = findLastUserMessage(messages, startIdx)
+  const summaryMsg = createSummaryMessage(block, userTemplate)
+  const summaryText = (summaryMsg.parts?.[0] as any)?.text || ""
+  const summaryTokenEstimate = estimateTokens(summaryText)
   estimatedSavedTokens = Math.max(0, removedTokenEstimate - summaryTokenEstimate)
 
-  const insertAfter = result.findIndex(m => m.id === block.startId)
+  const insertAfter = result.findIndex(m => (m.info?.id || m.id) === block.startId)
   if (insertAfter >= 0) {
     result.splice(insertAfter + 1, 0, summaryMsg)
     injectedCount = 1
   }
 
+  // In-place mutation — preserves the array reference OpenCode's pipeline holds
   messages.length = 0
   messages.push(...result)
 

@@ -116,6 +116,12 @@ function scoreContentSize(content?: string): number {
 /**
  * Calculate weighted importance score for a single message.
  * Returns 0.0 - 1.0 where higher = more important = keep.
+ *
+ * Uses recency as a multiplicative staleness factor:
+ *   finalScore = baseScore * recencyMultiplier
+ *
+ * This ensures OLD messages get aggressively low scores regardless of role,
+ * while recent messages keep their full base score.
  */
 export function scoreMessage(meta: MessageMeta): number {
   const scores = {
@@ -126,12 +132,20 @@ export function scoreMessage(meta: MessageMeta): number {
     contentSize: scoreContentSize(meta.content),
   }
 
-  const weighted =
-    scores.recency * WEIGHTS.recency +
+  const baseScore =
     scores.role * WEIGHTS.role +
     scores.toolType * WEIGHTS.toolType +
     scores.keywords * WEIGHTS.keywords +
     scores.contentSize * WEIGHTS.contentSize
+
+  // Recency as multiplicative staleness factor:
+  // - Newest message: multiplier = 1.0 (full base score)
+  // - Oldest message: multiplier = 0.0 (always prunable)
+  // This is more aggressive than weighted-sum for old/low-value messages
+  // while preserving recent/high-value content.
+  const staleness = Math.pow(scores.recency, 1.5) // Extra steepness beyond sqrt
+
+  const weighted = baseScore * staleness
 
   return Math.min(1.0, Math.max(0.0, weighted))
 }

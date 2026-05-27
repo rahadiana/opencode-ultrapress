@@ -109,7 +109,7 @@ export function getEffectiveSummary(blockId: number): string {
  */
 export function storeOriginalContent(
   blockId: number,
-  messages: Array<{ id: string; role: string; content?: string; parts?: any[] }>,
+  messages: Array<{ id?: string; role?: string; content?: string; parts?: any[]; info?: { id?: string; role?: string } }>,
 ): void {
   const block = blocksById.get(blockId)
   if (!block) return
@@ -125,7 +125,8 @@ export function storeOriginalContent(
       }
     }
     if (content) {
-      entries.push({ id: msg.id, role: msg.role, content })
+      const entryId = msg.info?.id || msg.id || `msg_unknown_${blockId}_${entries.length}`
+      entries.push({ id: entryId, role: msg.role || "unknown", content })
     }
   }
   block.originalEntries = entries

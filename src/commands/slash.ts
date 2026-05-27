@@ -5,6 +5,7 @@
 
 import type { SessionStats, UltraPressConfig } from "../config/schema.js"
 import { formatTokens } from "../utils/token-count.js"
+import { getAllBlocks } from "../dcp/compress-state.js"
 
 export interface SlashResult {
   response: string
@@ -99,6 +100,7 @@ Breakdown by layer:
 Deduplications : ${stats.deduplicationCount}
 Error Purges   : ${stats.errorPurgeCount}
 Compressions   : ${stats.compressionCount}
+L3 Blocks      : ${getAllBlocks().length}
 `
 }
 

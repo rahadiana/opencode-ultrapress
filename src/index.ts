@@ -8,12 +8,12 @@ import { sanitizeConfig } from "./config/validate.js"
 import type { UltraPressConfig, SessionStats } from "./config/schema.js"
 import { processToolOutput } from "./layers/layer1-output-filter.js"
 import { processMessageContext } from "./layers/layer2-caveman.js"
-import { processTurnForDCP, processCompactingHook } from "./layers/layer3-dcp.js"
+import { autoCompressMessages } from "./layers/layer3-dcp.js"
+import { applyPruning } from "./dcp/prune.js"
 import { compressToolDefinition } from "./dcp/compress-tool.js"
 import { expandToolDefinition } from "./dcp/expand-tool.js"
-import { applyPruning } from "./dcp/prune.js"
-import { storeOriginalContent, resetCompressionState } from "./dcp/compress-state.js"
-import { resetContextTokens, setRealContextTokens } from "./dcp/context-monitor.js"
+import { resetCompressionState, getAllBlocks, getProtectedContextString } from "./dcp/compress-state.js"
+import { setRealContextTokens, updateContextTokens, checkNudgeRequired, buildNudgePrompt } from "./dcp/context-monitor.js"
 import { applyCleanup, handleTurnTick } from "./layers/layer4-cleanup.js"
 import { handleSlashCommand } from "./commands/slash.js"
 import { estimateTokens } from "./utils/token-count.js"
@@ -326,37 +326,46 @@ export async function server(ctx: any): Promise<Hooks> {
 
            // SYNC HISTORY + REAL TOKENS: First call fetches real token counts
            // from OpenCode API (AssistantMessage.tokens) and estimates for fallback.
-          if (stats.totalTokensRaw === 0 && sessionID) {
+           // Also used for eager auto-compress on every user message.
+          if (sessionID) {
              try {
                 const msgs: Array<{ info: any; parts: Array<any> }> = await ctx.client.session.messages({ id: sessionID })
                 if (msgs && msgs.length > 0) {
-                   let estimatedTotal = 0
-                   let actualInput = 0
-                   let actualOutput = 0
-                   let actualReasoning = 0
-                   for (const { info } of msgs) {
-                      if (info) {
-                         // Estimate from message content for backward-compat stats
-                         if (typeof info.content === "string") {
-                            estimatedTotal += estimateTokens(info.content)
-                         }
-                         // Real token data from AssistantMessage
-                         if (info.tokens) {
-                            actualInput += info.tokens.input || 0
-                            actualOutput += info.tokens.output || 0
-                            actualReasoning += info.tokens.reasoning || 0
+                   // ─── Token sync (first call only) ──────────────────────
+                   if (stats.totalTokensRaw === 0) {
+                      let estimatedTotal = 0
+                      let actualInput = 0
+                      let actualOutput = 0
+                      let actualReasoning = 0
+                      for (const { info } of msgs) {
+                         if (info) {
+                            if (typeof info.content === "string") {
+                               estimatedTotal += estimateTokens(info.content)
+                            }
+                            if (info.tokens) {
+                               actualInput += info.tokens.input || 0
+                               actualOutput += info.tokens.output || 0
+                               actualReasoning += info.tokens.reasoning || 0
+                            }
                          }
                       }
+                      stats.totalTokensRaw = estimatedTotal
+                      stats.actualTokensInput = actualInput
+                      stats.actualTokensOutput = actualOutput
+                      stats.actualTokensReasoning = actualReasoning
+                      setRealContextTokens(actualInput, actualOutput)
+                      logger.info(`[Sync] History synced: ~${estimatedTotal} estimated, ${actualInput} real input, ${actualOutput} real output tokens.`)
                    }
-                   stats.totalTokensRaw = estimatedTotal
-                   stats.actualTokensInput = actualInput
-                   stats.actualTokensOutput = actualOutput
-                   stats.actualTokensReasoning = actualReasoning
-                   setRealContextTokens(actualInput, actualOutput)
-                   logger.info(`[Sync] History synced: ~${estimatedTotal} estimated, ${actualInput} real input, ${actualOutput} real output tokens.`)
+
+                   // ─── Eager auto-compress (every user message) ──────────
+                   // Create compression blocks early so pruning in
+                   // messages.transform can act immediately.
+                   if (config.summarization.enabled) {
+                      autoCompressMessages(msgs, config.summarization)
+                   }
                 }
              } catch (e) {
-                logger.debug("[Sync] Failed to sync history tokens, will continue with turn-based count.")
+                logger.debug("[Sync] Failed to sync history tokens / eager compress, will continue with turn-based count.")
              }
           }
 
@@ -366,57 +375,6 @@ export async function server(ctx: any): Promise<Hooks> {
              // Instruct OpenCode to purge these message IDs
              output.purgeMessages = idsToPurge
           }
-
-           // ─── L3: Apply pending pruning on context messages ───
-           // Convert output.message (each msg has { info, parts }) to MessageLike[] for pruning
-            if (output.message && Array.isArray(output.message) && config.summarization.enabled) {
-              const prunableMessages: Array<{ id: string; role: string; parts?: any[] }> =
-                 output.message.map((m: any) => ({
-                    id: m.info?.id || m.id,
-                    role: m.info?.role || m.role || "user",
-                    parts: m.parts || [],
-                 }))
-
-              const { prunedCount, estimatedTokensSaved } = applyPruning(prunableMessages, config.summarization.preserveLastN, config.summarization.scoreThreshold,
-                (blockId, removedMessages) => {
-                  storeOriginalContent(blockId, removedMessages)
-                }
-              )
-
-                if (prunedCount > 0) {
-                  // Rebuild output.message from pruned array
-                  // Map back: preserve original { info, parts } for kept messages,
-                  // create synthetic entries for summary messages (which have .content)
-                  const newMessages: any[] = []
-                 for (const m of prunableMessages) {
-                    if ((m as any).content) {
-                       // Summary message injected by applyPruning
-                       newMessages.push({
-                          info: { id: m.id, role: m.role },
-                          parts: [{ type: "text", text: (m as any).content }],
-                       })
-                    } else {
-                       // Find original entry to preserve reference
-                       const orig = output.message.find((o: any) => (o.info?.id || o.id) === m.id)
-                       newMessages.push(orig || { info: { id: m.id, role: m.role }, parts: m.parts || [] })
-                    }
-                 }
-                 output.message.length = 0
-                 output.message.push(...newMessages)
-                  if (estimatedTokensSaved > 0) {
-                    stats.savedByLayer.summarization += estimatedTokensSaved
-                  }
-                  resetContextTokens(0) // Reset context estimate after pruning
-                  if (sessionID) {
-                    sessionsPendingContextNote.add(sessionID)
-                  }
-                  logger.info(`[L3] Pruned ${prunedCount} messages from context (estimated ${estimatedTokensSaved} tokens saved).`)
-                } else {
-                   logger.debug("[L3] No messages pruned this turn (no eligible compression blocks or protected content only).")
-                }
-            } else if (config.summarization.enabled) {
-               logger.debug("[L3] Pruning skipped this turn: output.message not available or not an array.")
-            }
 
             // Layer 2 + 3: Semantic Compression & DCP Nudge
             // Content lives in output.parts (TextPart.text) not output.message.content
@@ -428,45 +386,45 @@ export async function server(ctx: any): Promise<Hooks> {
                stats.totalTokensRaw += estimateTokens(msgContent)
             }
 
-            // Only process if there's text content from the current turn
+            // ─── Layer 2: Semantic Compression ──────────────────────
+            // Process text content through semantic compression if enabled
+            let displayText: string = msgContent ?? ""
             if (msgContent && config.semantic.enabled) {
                 const role = input.role || "assistant"
-                // Extract tool name from output parts (for skipTools check)
                 const toolName = (output.parts || []).find((p: any) => p.type === "tool")?.tool
                 const content = await processMessageContext(msgContent, role, {
                    stats,
                   config: config.semantic,
                 }, toolName)
+                displayText = content
+            }
 
-               // ─── L3: DCP Turn-level Nudge ──────────────────────
-               // Check if context is approaching limit and inject nudge for LLM to compress
-               let displayText = content
-               if (config.summarization.enabled) {
-                  const { nudgePrompt } = processTurnForDCP(msgContent, {
-                     config: config.summarization,
-                     stats,
-                  })
-                  if (nudgePrompt) {
-                     displayText += "\n\n" + nudgePrompt
-                     logger.info("[L3] Injected DCP compression nudge into prompt.")
-                  }
-               }
-
-                // ─── L3: Context Note (post-compression reminder) ───
-                if (config.summarization.enabled && sessionID && sessionsPendingContextNote.has(sessionID)) {
-                   displayText += `\n\n[Context note: Older messages have been compressed. Focus on recent ${config.summarization.preserveLastN} messages.]`
-                   sessionsPendingContextNote.delete(sessionID)
-                   logger.info("[L3] Injected compressed context note into user prompt.")
+             // ─── L3: DCP Nudge (auto-compress runs in messages.transform) ──
+             if (msgContent && config.summarization.enabled) {
+                updateContextTokens(estimateTokens(msgContent))
+                if (checkNudgeRequired(config.summarization)) {
+                   const nudgePrompt = buildNudgePrompt(config.summarization)
+                   displayText += "\n\n" + nudgePrompt
+                   logger.info("[L3] Injected DCP compression nudge into prompt.")
                 }
 
-               // Track compressed tokens
-               stats.totalTokensCompressed += estimateTokens(content)
+                // ─── L3: Context Note (post-compression reminder) ───
+                 if (sessionID && sessionsPendingContextNote.has(sessionID)) {
+                    displayText += `\n\n[Context note: Older messages have been compressed. Focus on recent ${config.summarization.preserveLastN} messages.]`
+                    sessionsPendingContextNote.delete(sessionID)
+                    logger.info("[L3] Injected compressed context note into user prompt.")
+                 }
+             }
 
-               // Write final text back to output
-               if (displayText !== msgContent) {
-                  output.parts[textPartIndex].text = displayText
-               }
-           }
+            // Track compressed tokens (raw vs final display text)
+            if (msgContent) {
+               stats.totalTokensCompressed += estimateTokens(displayText)
+            }
+
+            // Write final text back to output if changed
+            if (displayText !== msgContent) {
+               output.parts[textPartIndex].text = displayText
+            }
         } catch (err) {
            logger.error(`[Hook] chat.message failed: ${err}`)
            // Output left unchanged — best-effort processing
@@ -478,18 +436,48 @@ export async function server(ctx: any): Promise<Hooks> {
      * Called when OpenCode is preparing the prompt for the LLM.
      * We can inject critical protected context here.
      */
-    "experimental.session.compacting": async (input: any, output: any) => {
-       try {
-          const protectedContext = processCompactingHook(input.sessionID, { config: config.summarization, stats })
-          if (protectedContext) {
-             output.context = output.context || []
-             output.context.push(protectedContext)
-          }
-       } catch (err) {
-          logger.error(`[Hook] session.compacting failed: ${err}`)
-          // Protected context omitted — best-effort
-       }
-    },
+     "experimental.session.compacting": async (input: any, output: any) => {
+        try {
+           const blocks = getAllBlocks()
+           const rawProtected = getProtectedContextString(input.sessionID)
+
+           if (blocks.length > 0) {
+              // ─── Use output.prompt (replaces default compaction prompt) ───
+              // When set, output.context is ignored by OpenCode.
+              const blockList = blocks.map(b =>
+                 `- Block #${b.blockId} ("${b.topic}"): ${b.summary}`
+              ).join("\n")
+              
+              const preserveN = config.summarization.preserveLastN
+              const protectedText = rawProtected || "(none)"
+              
+              output.prompt = `You are compacting an OpenCode conversation session.
+
+IMPORTANT — These messages have ALREADY been compressed into blocks.
+DO NOT re-compress them. They are tracked by UltraPress:
+
+${blockList}
+
+Compaction instructions:
+1. The last ${preserveN} messages are the most recent — keep them intact.
+2. Focus on compacting messages NOT in any UltraPress block above.
+3. Preserve these protected context items:
+${protectedText}
+4. Keep all user instructions, task context, and decision records.
+5. For verbose tool outputs, summarize concisely.
+6. Maintain code change history and file edit records.
+7. Never lose agent instructions, goals, or constraints.
+
+Compress older messages into a concise but complete summary.`
+           } else if (rawProtected) {
+              // ─── Fall back to output.context (augments default prompt) ───
+              output.context = output.context || []
+              output.context.push(rawProtected)
+           }
+        } catch (err) {
+           logger.error(`[Hook] session.compacting failed: ${err}`)
+        }
+     },
 
      /**
       * experimental.chat.messages.transform
@@ -498,37 +486,68 @@ export async function server(ctx: any): Promise<Hooks> {
       * oh-my-openagent's transform — allowing us to undo [analyze-mode]
       * injection on /up command messages.
       */
-      "experimental.chat.messages.transform": async (_input: {}, output: { messages: any[] }) => {
-         if (!Array.isArray(output?.messages)) return
+       "experimental.chat.messages.transform": async (_input: {}, output: { messages: any[] }) => {
+          if (!Array.isArray(output?.messages)) return
 
-         for (const msg of output.messages) {
-            if (!Array.isArray(msg?.parts)) continue
+          // ─── Step 1: Strip [analyze-mode] / [search-mode] injections ──
+          for (const msg of output.messages) {
+             if (!Array.isArray(msg?.parts)) continue
 
-            for (let i = 0; i < msg.parts.length; i++) {
-               const part = msg.parts[i]
-               if (part?.type !== "text" || typeof part.text !== "string") continue
+             for (let i = 0; i < msg.parts.length; i++) {
+                const part = msg.parts[i]
+                if (part?.type !== "text" || typeof part.text !== "string") continue
 
-               // Strip [analyze-mode] / [search-mode] blocks injected by oh-my-openagent.
-               part.text = part.text.replace(
-                  /\[(?:analyze|search)-mode\][\s\S]*?[\r\n]+---[\s]*/gi,
-                  ""
-               ).trim()
+                part.text = part.text.replace(
+                   /\[(?:analyze|search)-mode\][\s\S]*?[\r\n]+---[\s]*/gi,
+                   ""
+                ).trim()
 
-               // Strip leaked orchestration boilerplate from oh-my-openagent system prompt
-               // that the model echoes back (MANDATORY delegate_task params, Example: delegate_task(...),
-               // ANALYSIS MODE / SEARCH MODE blocks, etc.)
-               part.text = part.text.replace(
-                  /(?:MANDATORY delegate_task params[\s\S]*?run_in_background when calling delegate_task\.|Example:\s*delegate_task\([\s\S]*?load_skills=\[\]\))[\s]*---?[\s]*/gi,
-                  ""
-               ).trim()
+                part.text = part.text.replace(
+                   /(?:MANDATORY delegate_task params[\s\S]*?run_in_background when calling delegate_task\.|Example:\s*delegate_task\([\s\S]*?load_skills=\[\]\))[\s]*---?[\s]*/gi,
+                   ""
+                ).trim()
 
-               part.text = part.text.replace(
-                  /(?:ANALYSIS\s+MODE|SEARCH\s+MODE)[\s\S]*?(?:proceed|synthesize findings)/gi,
-                  ""
-               ).trim()
+                part.text = part.text.replace(
+                   /(?:ANALYSIS\s+MODE|SEARCH\s+MODE)[\s\S]*?(?:proceed|synthesize findings)/gi,
+                   ""
+                ).trim()
+             }
+          }
+
+           // ─── Step 2: L3 Auto-Compress ──
+            // Creates compression blocks for old messages. Does NOT modify
+            // output.messages array (idempotent).
+            try {
+               if (config.summarization.enabled && output.messages.length > 0) {
+                  autoCompressMessages(output.messages, config.summarization)
+               }
+            } catch (e) {
+               logger.error(`[messages.transform] L3 auto-compress failed: ${e}`)
             }
-         }
-      },
+
+            // ─── Step 3: L3 Pruning ──
+            // Replaces compressed old messages with synthetic summary messages
+            // via in-place array mutation (messages.length = 0; messages.push(...)).
+            // This preserves the array reference OpenCode's pipeline holds,
+            // unlike reassigning output.messages which breaks the pipeline.
+            //
+            // Proven working by opencode-dynamic-context-pruning plugin:
+            // https://github.com/Opencode-DCP/opencode-dynamic-context-pruning
+            try {
+               if (config.summarization.enabled && output.messages.length > 0) {
+                  const result = applyPruning(
+                     output.messages,
+                     config.summarization.preserveLastN || 0,
+                     config.summarization.scoreThreshold || 0,
+                  )
+                  if (result.prunedCount > 0) {
+                     logger.info(`[L3] Pruned ${result.prunedCount} messages, injected ${result.injectedCount} summaries, saved ~${result.estimatedTokensSaved} tokens`)
+                  }
+               }
+            } catch (e) {
+               logger.error(`[messages.transform] L3 pruning failed: ${e}`)
+            }
+       },
 
      /**
       * Configuration Hook

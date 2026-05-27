@@ -5,6 +5,85 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.2.9] — 2026-05-28
+
+### Fixed
+- **scoreThreshold default mismatch**: `defaults.ts` had 0.20 while `schema.json` and docs documented 0.45. Synced code default to 0.45.
+
+---
+
+## [0.2.8] — 2026-05-27
+
+### Fixed
+- **/up follow-up suppression**: bypass role check entirely — strip leaked `/up` output patterns from any follow-up message instead of clearing full output. More targeted cleanup prevents info loss.
+
+---
+
+## [0.2.7] — 2026-05-26
+
+### Fixed
+- **/up follow-up suppression broadened**: catch non-assistant role messages that leak `/up` command output, preventing follow-up model leakage.
+- **Strip leaked `delegate_task` / `ANALYSIS MODE` patterns**: remove `MANDATORY delegate_task params` blocks and `ANALYSIS/SEARCH MODE` injections from `experimental.chat.messages.transform` hook. Stops AI-slop patterns from reaching the model.
+
+---
+
+## [0.2.6] — 2026-05-25
+
+### Added
+- **enableDebug toggle**: new `enableDebug` config key to control UltraPress console logs independently. Default `false` (silent). Set `true` to see L1-L4 debug output in OpenCode terminal.
+- **Logger routing**: MLM/LLM mode console logs now go through `logger` module instead of raw `console.log`, respecting the configured log level.
+
+### Fixed
+- **Log level timing**: `enableDebug` log level is applied before config loading output, preventing spurious startup messages.
+- **/up handler stabilization**: fixed follow-up detection for `/up` command to reliably suppress leaked command output after slash commands.
+
+---
+
+## [0.2.5] — 2026-05-23
+
+### Changed
+- No functional changes. Version bumped to align npm with git state.
+
+---
+
+## [0.2.4] — 2026-05-23
+
+### Added
+- **Balanced runtime defaults**: tuned default config for better out-of-box experience — `preserveLastN: 4`, `scoreThreshold: 0.45`, `minContextLimit: 35000`, `maxContextLimit: 60000`.
+- **Docs synced**: `ultrapress.schema.json` and config reference docs updated to match default values.
+
+### Fixed
+- **Critical context protection**: protected context strings are injected during `experimental.session.compacting` to prevent compression/pruning from losing critical agent instructions.
+- **ONNX Runtime thread leak**: limited ONNX Runtime threads to 2 + proper pipeline dispose to prevent Bun process leaks on Windows.
+- **Block ID safe integer range**: keep compression block IDs within `Number.MAX_SAFE_INTEGER` by combining time prefix with counter.
+- **Config validation hardening**: resolve config type mismatches, add validation layer, harden compression against edge cases.
+- **ultrapress.schema.json sync**: schema file now accurately reflects all fields in `schema.ts` (including `nudgeThreshold`, `model`, `skipTools`, etc.). Fixed MLM pre-load path.
+- **CI publish fix**: `NODE_AUTH_TOKEN` passed to `setup-node` step so `.npmrc` is correctly written with auth credentials for npm publish.
+
+---
+
+## [0.2.3] — 2026-05-20
+
+### Added
+- **Balanced defaults**: re-tuned `preserveLastN`, `scoreThreshold`, `minContextLimit`, `maxContextLimit` for stable long sessions.
+
+### Fixed
+- **Critical context protection**: `getProtectedContextString()` now included in compaction hook output so critical agent instructions are not lost during compression/pruning.
+- **Schema defaults synced**: `ultrapress.schema.json` defaults aligned with `defaults.ts`.
+
+---
+
+## [0.2.2] — 2026-05-19
+
+### Fixed
+- **ultrapress.schema.json sync**: schema file now accurately reflects all fields from `schema.ts`. Added missing `nudgeThreshold`, `model`, `skipTools` entries. Fixed MLM pre-load path.
+- **Config validation**: resolve type mismatches between schema and defaults. Added validation layer to catch config issues at startup.
+- **Block ID range**: compression block IDs now stay within `Number.MAX_SAFE_INTEGER` using time-prefixed counter instead of unbounded increment.
+- **ONNX thread leak**: restrict ONNX Runtime to 2 threads + dispose pipeline properly to prevent Bun process leaks on Windows.
+- **CI publish auth**: pass `NODE_AUTH_TOKEN` to `setup-node` step so `.npmrc` is properly created with npm credentials.
+
+---
+
 ## [0.2.1] — 2026-05-18
 
 ### Fixed
@@ -71,6 +150,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - History token sync on session resume
 - Session statistics tracking per layer
 
+[0.2.9]: https://github.com/rahadiana/opencode-ultrapress/compare/v0.2.8...v0.2.9
+[0.2.8]: https://github.com/rahadiana/opencode-ultrapress/compare/v0.2.7...v0.2.8
+[0.2.7]: https://github.com/rahadiana/opencode-ultrapress/compare/v0.2.6...v0.2.7
+[0.2.6]: https://github.com/rahadiana/opencode-ultrapress/compare/v0.2.5...v0.2.6
+[0.2.5]: https://github.com/rahadiana/opencode-ultrapress/compare/v0.2.4...v0.2.5
+[0.2.4]: https://github.com/rahadiana/opencode-ultrapress/compare/v0.2.3...v0.2.4
+[0.2.3]: https://github.com/rahadiana/opencode-ultrapress/compare/v0.2.2...v0.2.3
+[0.2.2]: https://github.com/rahadiana/opencode-ultrapress/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/rahadiana/opencode-ultrapress/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/rahadiana/opencode-ultrapress/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/rahadiana/opencode-ultrapress/releases/tag/v0.1.0
