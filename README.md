@@ -81,48 +81,51 @@
 
 Legend: ✅ recommended · ⚠️ possible but resource-sensitive
 
-### Cross-Platform Notes (npm install)
+### Cross-Platform Notes
 
-UltraPress is pure TypeScript/Node plugin runtime and is designed to work across:
+UltraPress is pure TypeScript and works across all platforms OpenCode supports:
 
 - macOS
 - Linux
-- WSL
-- Termux (Node-supported environments)
+- WSL / Termux
 - Windows
 
 What to expect:
 
-- `npm install -g @rahadiana/opencode-ultrapress` should be stable across supported OS/runtime combinations.
 - `mlm` / `llm` modes may download model assets on first use (larger disk/RAM footprint).
 - If your environment is resource-limited (e.g., small VPS/Termux), use default **Balanced (NLP)** or force `semantic.mode: "nlp"` for zero-model operation.
 
 ### 1. Install the Plugin
 
 ```bash
-# From npm (recommended)
+# Recommended — auto-registers with OpenCode
+opencode plugin @rahadiana/opencode-ultrapress@latest --global
+
+# Or via npm + manual config
 npm install -g @rahadiana/opencode-ultrapress
 
-# Or from GitHub (latest development)
+# From GitHub (latest development)
 npm install -g github:rahadiana/opencode-ultrapress
 
-# Or clone & link manually
+# Clone & link manually
 git clone https://github.com/rahadiana/opencode-ultrapress.git
 cd opencode-ultrapress
 npm install && npm run build && npm link
 ```
 
-### 2. Register to OpenCode
+> 💡 `opencode plugin` auto-registers the plugin. If using `npm install`, proceed to step 2.
 
-Add the plugin to the OpenCode configuration file at `~/.config/opencode/config.json`:
+### 2. Register to OpenCode (npm install only)
+
+If you installed via `opencode plugin`, skip this step — registration is automatic.
+
+Add the plugin to OpenCode's config at `~/.config/opencode/config.json`:
 
 ```json
 {
   "plugins": ["@rahadiana/opencode-ultrapress"]
 }
 ```
-
-> 💡 **Tip**: OpenCode will auto-resolve globally installed plugins via the `@opencode-ai/plugin` runtime. Restart OpenCode after adding the plugin.
 
 ### 3. (Optional) Create Personal Configuration
 
@@ -169,14 +172,15 @@ Minimal override examples:
 
 ### Verify Installation
 
-After restarting OpenCode, type in chat:
+Restart OpenCode, then type in chat:
 
 ```
 /up stats
 ```
 
 If a statistics dashboard appears, UltraPress is active. If not:
-1. Ensure the plugin is in `config.json` → `"plugins": ["@rahadiana/opencode-ultrapress"]`
+1. Installed via `npm install`? Make sure the plugin is in `config.json` → `"plugins": ["@rahadiana/opencode-ultrapress"]`
+2. Installed via `opencode plugin`? Run `opencode plugin list` to confirm it's registered.
 2. Check OpenCode logs for errors
 3. Ensure Node.js >= 18 is installed (`node --version`)
 
