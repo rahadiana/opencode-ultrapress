@@ -289,25 +289,28 @@ export async function server(ctx: any): Promise<Hooks> {
           // Suppress one immediate assistant follow-up after /up command handling.
           // This prevents the model from appending unrelated text (e.g. leaked
           // orchestration instructions) after UltraPress already produced output.
-          if (sessionID && sessionsSuppressCommandFollowup.has(sessionID) && Array.isArray(output?.parts)) {
-             const textPart = output.parts.find((p: any) => p?.type === "text" && typeof p.text === "string")
-             const text = textPart?.text ?? ""
-             const role = output?.message?.role || output?.message?.info?.role
-             const isUltraPressCommandPayload = typeof text === "string" && text.startsWith("[STM: UltraPress handled /up")
+           if (sessionID && sessionsSuppressCommandFollowup.has(sessionID) && Array.isArray(output?.parts)) {
+              const textPart = output.parts.find((p: any) => p?.type === "text" && typeof p.text === "string")
+              const text = textPart?.text ?? ""
+              const role = output?.message?.role || output?.message?.info?.role
+              const isUltraPressCommandPayload = typeof text === "string" && text.startsWith("[STM: UltraPress handled /up")
 
-             // If we have moved on to a normal user message, drop stale suppress flag.
-             if (!isUltraPressCommandPayload && role === "user") {
-                sessionsSuppressCommandFollowup.delete(sessionID)
-             }
+              // Drop stale suppress flag when a normal (non-/up) user message arrives.
+              if (!isUltraPressCommandPayload && role === "user") {
+                 sessionsSuppressCommandFollowup.delete(sessionID)
+              }
 
-             if (!isUltraPressCommandPayload && role === "assistant") {
-                output.parts.length = 0
-                output.parts.push({ type: "text", text: "\u200b" })
-                sessionsSuppressCommandFollowup.delete(sessionID)
-                logger.info("[Command] Suppressed immediate assistant follow-up after /up.")
-                return
-             }
-          }
+              // Suppress the first non-user output after /up.
+              // Some OpenCode versions don't set message.role as "assistant",
+              // so we match on role !== "user" (i.e. assistant, system, or undefined).
+              if (!isUltraPressCommandPayload && role !== "user") {
+                 output.parts.length = 0
+                 output.parts.push({ type: "text", text: "\u200b" })
+                 sessionsSuppressCommandFollowup.delete(sessionID)
+                 logger.info("[Command] Suppressed immediate assistant follow-up after /up.")
+                 return
+              }
+           }
 
            // SYNC HISTORY + REAL TOKENS: First call fetches real token counts
            // from OpenCode API (AssistantMessage.tokens) and estimates for fallback.
