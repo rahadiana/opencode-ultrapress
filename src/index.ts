@@ -23,6 +23,7 @@ import { resetLLMPipeline } from "./caveman/llm.js"
 
 let config: UltraPressConfig
 let stats: SessionStats
+declare const __ULTRAPRESS_VERSION__: string
 const sessionsPendingContextNote = new Set<string>()
 const sessionsSuppressCommandFollowup = new Set<string>()
 const GLOBAL_CLEANUP_REGISTRY_KEY = "__ultrapressCleanupState__" as const
@@ -176,6 +177,22 @@ export async function server(ctx: any): Promise<Hooks> {
            }
         })
      })
+  }
+
+  // Fire-and-forget version check (OpenCode caches @latest, so users won't auto-update)
+  if (typeof __ULTRAPRESS_VERSION__ !== "undefined") {
+    fetch("https://registry.npmjs.org/@rahadiana/opencode-ultrapress/latest", { signal: AbortSignal.timeout(5000) })
+      .then(async r => r.ok ? (await r.json() as { version: string }).version : null)
+      .then(latest => {
+        if (latest && latest !== __ULTRAPRESS_VERSION__) {
+          const cacheDir = join(homedir(), ".cache", "opencode", "packages", "@rahadiana", "opencode-ultrapress@latest")
+          logger.warn(
+            `[Update] v${latest} available (running v${__ULTRAPRESS_VERSION__}). ` +
+            `Clear cache: rm -rf "${cacheDir}" && restart OpenCode`
+          )
+        }
+      })
+      .catch(() => {})
   }
 
   return {
