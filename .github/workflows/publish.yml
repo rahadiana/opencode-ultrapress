@@ -13,7 +13,7 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       id-token: write
     steps:
       - uses: actions/checkout@v4
@@ -44,12 +44,27 @@ jobs:
       - run: bun run build
 
       - name: Publish to npm
+        id: publish
         run: |
           VERSION=$(node -p "require('./package.json').version")
           if npm view @rahadiana/opencode-ultrapress@$VERSION version &>/dev/null; then
             echo "Version $VERSION already published — skipping."
+            echo "published=false" >> $GITHUB_OUTPUT
           else
             npm publish --access public
+            echo "published=true" >> $GITHUB_OUTPUT
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
           fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        if: steps.publish.outputs.published == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.publish.outputs.version }}"
+          gh release create "v$VERSION" \
+            --title "v$VERSION" \
+            --notes "See [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details." \
+            --target "${{ github.sha }}"
