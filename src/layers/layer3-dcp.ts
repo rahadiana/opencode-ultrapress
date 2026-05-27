@@ -37,6 +37,10 @@ export function processTurnForDCP(
 
 // ─── Auto-Compress (replaces nudge) ──────────────────────────────────────
 
+/** Minimum eligible messages before auto-compress triggers. Below this, the
+ *  prompt-token cost of creating a compression block exceeds the savings. */
+const MIN_AUTO_BATCH = 5
+
 /**
  * Auto-compress old messages when context is approaching limit.
  * Creates compression blocks for messages outside the preserveLastN window
@@ -88,7 +92,9 @@ export function autoCompressMessages(
   // Merge strict + extended (strict first, extended second)
   const allEligible = [...eligibleIds, ...extendedIds]
 
-  if (allEligible.length === 0) return 0
+  // Skip if batch is too small — compressing 1-4 messages costs more
+  // prompt tokens than just keeping them in context.
+  if (allEligible.length < MIN_AUTO_BATCH) return 0
 
   // Create a single compression block for all eligible messages
   const firstId = allEligible[0]
