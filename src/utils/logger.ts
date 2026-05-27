@@ -17,8 +17,9 @@ export function getLogLevel(): NotificationLevel {
   return _level
 }
 
-/** Always shown (errors) */
+/** Errors — shown in minimal+ mode, suppressed when off */
 export function error(msg: string, ...args: unknown[]): void {
+  if (_level === "off") return
   console.error(`${PREFIX} \x1b[31m✖\x1b[0m ${msg}`, ...args)
 }
 

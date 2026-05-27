@@ -51,7 +51,16 @@ async function loadModel(modelName: string): Promise<any> {
     // Limit ONNX Runtime threads to prevent excessive Bun worker processes
     process.env.ORT_NUM_THREADS = process.env.ORT_NUM_THREADS || "1"
 
-    const { pipeline: loadPipeline, env } = await import("@huggingface/transformers")
+    let loadPipeline: any, env: any
+    try {
+      const mod = await import("@huggingface/transformers")
+      loadPipeline = mod.pipeline
+      env = mod.env
+    } catch {
+      throw new Error(
+        "@huggingface/transformers not installed. Run: npm install @huggingface/transformers, or switch semantic.mode to 'nlp'."
+      )
+    }
     Object.assign(env, { allowLocalModels: true, allowRemoteModels: true })
 
     // Limit WASM backend threads

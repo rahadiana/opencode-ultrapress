@@ -51,9 +51,11 @@ function getCleanupState(): CleanupState {
 }
 
 import { Hooks } from "@opencode-ai/plugin"
-import { join } from "path"
+import { join, dirname } from "path"
 import { readFile, writeFile, mkdir } from "fs/promises"
 import { homedir } from "os"
+import { exec } from "child_process"
+import { fileURLToPath } from "url"
 
 /**
  * OpenCode Plugin Initialization
@@ -74,16 +76,18 @@ export async function server(ctx: any): Promise<Hooks> {
     baseConfig = sanitizeConfig(externalConfig)
     // Write back sanitized config to migrate any new default fields not present in old file
     try {
-      await writeFile(configPath, JSON.stringify(baseConfig, null, 2), "utf-8")
+      const writeConfig = { ...baseConfig, enableDebug: baseConfig.enableDebug ?? false }
+      await writeFile(configPath, JSON.stringify(writeConfig, null, 2), "utf-8")
     } catch { /* best-effort; in-memory config is already valid */ }
     logger.setLogLevel(baseConfig.enableDebug ? baseConfig.notification : "off")
     logger.info(`[Config] Loaded dedicated config from ${configPath}`)
   } catch (e: any) {
     if (e.code === "ENOENT") {
        // Best Practice: Auto-create the config file if it doesn't exist
-       try {
-          await mkdir(configDir, { recursive: true })
-          await writeFile(configPath, JSON.stringify(baseConfig, null, 2), "utf-8")
+        try {
+           await mkdir(configDir, { recursive: true })
+           const writeConfig = { ...baseConfig, enableDebug: baseConfig.enableDebug ?? false }
+           await writeFile(configPath, JSON.stringify(writeConfig, null, 2), "utf-8")
           logger.setLogLevel(baseConfig.enableDebug ? baseConfig.notification : "off")
           logger.info(`[Config] Created best-practice configuration at ${configPath}`)
        } catch (writeErr) {
@@ -144,8 +148,18 @@ export async function server(ctx: any): Promise<Hooks> {
   
   // Pre-load MLM model if enabled to avoid lag on first message
   if (config.semantic.enabled && config.semantic.mode === "mlm") {
-     import("./caveman/mlm.js").then(m => m.loadModel(config.semantic.model!)).catch(err => {
-        logger.warn(`[MLM] Pre-load failed: ${err}`)
+     import("./caveman/mlm.js").then(m => m.loadModel(config.semantic.model!)).catch(async () => {
+        logger.warn(`[MLM] Model load failed (@huggingface/transformers missing?), falling back to NLP for this session. Auto-install in background...`)
+        // In-memory fallback only — config file stays "mlm" for next restart
+        config.semantic.mode = "nlp"
+        const pluginDir = dirname(fileURLToPath(import.meta.url))
+        exec("npm install @huggingface/transformers --no-save", { cwd: pluginDir }, (error, _stdout) => {
+           if (error) {
+              logger.warn(`[MLM] Auto-install failed: ${error.message}. Install manually: cd "${pluginDir}" && npm install @huggingface/transformers`)
+           } else {
+              logger.info("[MLM] @huggingface/transformers installed — restart to use MLM mode.")
+           }
+        })
      })
   }
 

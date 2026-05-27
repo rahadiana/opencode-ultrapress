@@ -5,7 +5,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [0.2.9] — 2026-05-28
+## [0.2.10] — 2026-05-28
+
+### Fixed
+- **`error()` logger now respects `enableDebug`**: when `enableDebug: false`, all log output including errors is suppressed.
+- **MLM/LLM import error handling**: `@huggingface/transformers` moved to `optionalDependencies`. Import failures now show a clear error message instead of a cryptic stack trace.
+- **Config migration on upgrade**: auto-writes sanitized config on load so new fields (like `enableDebug`) appear in the file after upgrading.
+- **Defensive config write**: `enableDebug` field is always explicitly included in the auto-created `ultrapress.json` even in edge-case runtime scenarios.
+- **Auto-install fallback for MLM mode**: when `semantic.mode` is `"mlm"` but `@huggingface/transformers` is not installed, falls back to NLP for the session and attempts `npm install` in the background. Config file stays `"mlm"` for next restart.
+
+---
 
 ### Fixed
 - **scoreThreshold default mismatch**: `defaults.ts` had 0.20 while `schema.json` and docs documented 0.45. Synced code default to 0.45.
