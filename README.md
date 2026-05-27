@@ -98,22 +98,50 @@ What to expect:
 ### 1. Install the Plugin
 
 ```bash
-# Recommended — auto-registers with OpenCode
-opencode plugin @rahadiana/opencode-ultrapress@latest --global
-
-# Or via npm + manual config
-npm install -g @rahadiana/opencode-ultrapress
-
-# From GitHub (latest development)
-npm install -g github:rahadiana/opencode-ultrapress
-
-# Clone & link manually
-git clone https://github.com/rahadiana/opencode-ultrapress.git
-cd opencode-ultrapress
-npm install && npm run build && npm link
+# ✅ RECOMMENDED — auto-registers with OpenCode
+opencode plugin add @rahadiana/opencode-ultrapress@latest --global
 ```
 
-> 💡 `opencode plugin` auto-registers the plugin. If using `npm install`, proceed to step 2.
+> ⚠️ **Important:** OpenCode caches the plugin at `~/.cache/opencode/packages/`. `@latest` is resolved **once** on first install — subsequent versions won't auto-update. To upgrade:
+>
+> ```bash
+> rm -rf ~/.cache/opencode/packages/@rahadiana/opencode-ultrapress@latest
+> opencode plugin add @rahadiana/opencode-ultrapress@latest --global
+> ```
+>
+> The plugin will warn you at startup if a newer version is available.
+
+**Alternative install methods** (not recommended for end users):
+
+```bash
+# Via npm — requires manual registration (step 2), same cache caveat applies
+npm install -g @rahadiana/opencode-ultrapress
+
+# GitHub latest — for testing pre-release changes
+npm install -g github:rahadiana/opencode-ultrapress
+```
+
+**For plugin development:**
+
+```bash
+git clone https://github.com/rahadiana/opencode-ultrapress.git
+cd opencode-ultrapress
+npm install
+npm run build
+
+# Link globally so OpenCode can find it
+npm link
+
+# Then in OpenCode's config (~/.config/opencode/config.json), add:
+# { "plugins": ["@rahadiana/opencode-ultrapress"] }
+#
+# After making code changes, re-run:
+# npm run build
+#
+# No need to re-link — OpenCode loads from the linked directory.
+# If using opencode plugin add, remove the cached version first:
+# rm -rf ~/.cache/opencode/packages/@rahadiana/opencode-ultrapress@latest
+```
 
 ### 2. Register to OpenCode (npm install only)
 
@@ -187,13 +215,19 @@ If a statistics dashboard appears, UltraPress is active. If not:
 ### Uninstall
 
 ```bash
-# If installed from GitHub (global)
+# 1. Remove from OpenCode plugin list
+#    Edit ~/.config/opencode/config.json — remove "@rahadiana/opencode-ultrapress" from plugins array
+
+# 2. Purge the cached version
+rm -rf ~/.cache/opencode/packages/@rahadiana/opencode-ultrapress@latest
+
+# 3. If installed via npm (global)
 npm uninstall -g @rahadiana/opencode-ultrapress
 
-# If using npm link
+# 4. If using npm link
 npm unlink -g @rahadiana/opencode-ultrapress
 
-# Clean up config
+# 5. Clean up config
 rm ~/.config/opencode/ultrapress.plugin.json
 ```
 
