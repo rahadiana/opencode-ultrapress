@@ -5,13 +5,21 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.2.11] — 2026-05-28
+
+### Changed
+- **Config file separated from built-in**: plugin now uses `ultrapress.plugin.json` instead of `ultrapress.json` to avoid colliding with OpenCode's built-in Ultrapress. Built-in's `"enabled"` no longer affects our plugin, and vice versa.
+- **Auto-migration**: if old `ultrapress.json` exists, it's copied to the new filename on first load.
+
+---
+
 ## [0.2.10] — 2026-05-28
 
 ### Fixed
 - **`error()` logger now respects `enableDebug`**: when `enableDebug: false`, all log output including errors is suppressed.
 - **MLM/LLM import error handling**: `@huggingface/transformers` moved to `optionalDependencies`. Import failures now show a clear error message instead of a cryptic stack trace.
 - **Config migration on upgrade**: auto-writes sanitized config on load so new fields (like `enableDebug`) appear in the file after upgrading.
-- **Defensive config write**: `enableDebug` field is always explicitly included in the auto-created `ultrapress.json` even in edge-case runtime scenarios.
+- **Defensive config write**: `enableDebug` field is always explicitly included in the auto-created `ultrapress.plugin.json` even in edge-case runtime scenarios.
 - **Auto-install fallback for MLM mode**: when `semantic.mode` is `"mlm"` but `@huggingface/transformers` is not installed, falls back to NLP for the session and attempts `npm install` in the background. Config file stays `"mlm"` for next restart.
 
 ---
@@ -101,7 +109,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Session isolation**: `nextBlockId` started at 0, risking ID collisions across plugin restarts. Changed to `Date.now()` and added `resetCompressionState()` call at `server()` startup.
 
 ### Added
-- **Config persistence**: `/up mode`, `/up filter`, `/up manual` now persist changes to `ultrapress.json` on disk. Mutations survive plugin restart.
+- **Config persistence**: `/up mode`, `/up filter`, `/up manual` now persist changes to `ultrapress.plugin.json` on disk. Mutations survive plugin restart.
 - **Config mutation tracking**: `handleSlashCommand()` returns `SlashResult { response, configMutated }` for selective disk writes.
 
 ---
@@ -131,7 +139,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Dependencies pinned**: `@opencode-ai/plugin` from `"latest"` to `"^1.14.0"`
 - **Model default**: MLM from `distilbert-base-uncased` to `all-MiniLM-L6-v2`
 - **Export format**: `export default server` (function) for plugin loader compatibility
-- **Example file**: `ultrapress.json.example` → `ultrapress.jsonc.example` (valid JSONC)
+- **Example file**: `ultrapress.plugin.json.example` → `ultrapress.plugin.jsonc.example` (valid JSONC)
 - **TSup**: `dts: false` → `dts: true` for `.d.ts` generation
 - **Logger**: added `warn()` function
 
@@ -154,7 +162,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Layer 3**: Dynamic Context Pruning (DCP) with autonomous LLM nudging and `ultrapress_compress` tool
 - **Layer 4**: Session Auto-Cleanup with error purging and tool-call deduplication
 - Native `/up` slash command support with subcommands: `stats`, `context`, `compress`, `mode`, `filter`, `manual`
-- Dedicated config file support at `~/.config/opencode/ultrapress.json`
+- Dedicated config file support at `~/.config/opencode/ultrapress.plugin.json`
 - Auto-creation of config file with best-practice defaults on first run
 - History token sync on session resume
 - Session statistics tracking per layer

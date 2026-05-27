@@ -1,6 +1,6 @@
 # ⚙️ UltraPress Configuration — Complete Reference
 
-> File: `~/.config/opencode/ultrapress.json`
+> File: `~/.config/opencode/ultrapress.plugin.json`
 
 UltraPress works *out-of-the-box* with a **Balanced default profile** (recommended for most users). The configuration file is optional — if not found, the plugin will automatically create it on first run.
 

@@ -133,13 +133,13 @@ UltraPress works out-of-the-box with **Balanced defaults**. For customization:
 
 ```bash
 # Install from GitHub → copy from the cloned repo
-cp ultrapress.jsonc.example ~/.config/opencode/ultrapress.json
+cp ultrapress.plugin.jsonc.example ~/.config/opencode/ultrapress.plugin.json
 
 # Or from global install
-cp $(npm root -g)/@rahadiana/opencode-ultrapress/ultrapress.json.example ~/.config/opencode/ultrapress.json
+cp $(npm root -g)/@rahadiana/opencode-ultrapress/ultrapress.plugin.json.example ~/.config/opencode/ultrapress.plugin.json
 ```
 
-Then edit `~/.config/opencode/ultrapress.json` as needed. If the file is not found, UltraPress will automatically create it with default values on first run.
+Then edit `~/.config/opencode/ultrapress.plugin.json` as needed. If the file is not found, UltraPress will automatically create it with default values on first run.
 
 ### Quick-Start Profiles by Device
 
@@ -194,7 +194,7 @@ npm uninstall -g @rahadiana/opencode-ultrapress
 npm unlink -g @rahadiana/opencode-ultrapress
 
 # Clean up config
-rm ~/.config/opencode/ultrapress.json
+rm ~/.config/opencode/ultrapress.plugin.json
 ```
 
 ---
@@ -334,7 +334,7 @@ Automatically cleans "garbage" from the context window.
 
 ### Basic Structure
 
-File: `~/.config/opencode/ultrapress.json`
+File: `~/.config/opencode/ultrapress.plugin.json`
 
 ```jsonc
 {
@@ -513,7 +513,7 @@ opencode-ultrapress/
 ├── docs/
 │   └── image/
 │       └── banner.svg              # README banner
-├── ultrapress.jsonc.example        # Configuration template (JSONC)
+├── ultrapress.plugin.jsonc.example        # Configuration template (JSONC)
 ├── tsconfig.json                   # TypeScript config
 ├── tsup.config.ts                  # Build config (tsup)
 ├── package.json
@@ -539,7 +539,7 @@ opencode-ultrapress/
 1. Plugin Init
    config hook → register /up command
    tool definition → register ultrapress_compress
-   load/migrate config from ~/.config/opencode/ultrapress.json
+   load/migrate config from ~/.config/opencode/ultrapress.plugin.json
 
 2. Tool Execution (every tool call)
    tool.execute.after → L1 processToolOutput()

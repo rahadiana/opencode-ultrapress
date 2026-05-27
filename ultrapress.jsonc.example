@@ -57,6 +57,6 @@
 }
 
 // CATATAN PENTING:
-// - File runtime config (~/.config/opencode/ultrapress.json) harus JSON murni tanpa komentar
+// - File runtime config (~/.config/opencode/ultrapress.plugin.json) harus JSON murni tanpa komentar
 // - File ini adalah JSONC (dengan komentar) hanya untuk referensi
 // - Jika copy file ini ke runtime path, hapus semua komentar atau gunakan JSON parser yang support JSONC

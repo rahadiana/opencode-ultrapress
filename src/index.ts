@@ -52,7 +52,7 @@ function getCleanupState(): CleanupState {
 
 import { Hooks } from "@opencode-ai/plugin"
 import { join, dirname } from "path"
-import { readFile, writeFile, mkdir } from "fs/promises"
+import { readFile, writeFile, mkdir, copyFile } from "fs/promises"
 import { homedir } from "os"
 import { exec } from "child_process"
 import { fileURLToPath } from "url"
@@ -64,9 +64,24 @@ export async function server(ctx: any): Promise<Hooks> {
   // 1. Start with hardcoded defaults
   let baseConfig = mergeConfig({})
   
-  // 2. Try to load from ~/.config/opencode/ultrapress.json
+  // 2. Try to load from ~/.config/opencode/ultrapress.plugin.json
   const configDir = join(homedir(), ".config", "opencode")
-  const configPath = join(configDir, "ultrapress.json")
+  const configPath = join(configDir, "ultrapress.plugin.json")
+  const oldConfigPath = join(configDir, "ultrapress.json")
+
+  // Migrate old config to new filename if exists
+  try {
+    await readFile(oldConfigPath, "utf-8")
+    // Old file exists → check if new file exists
+    try {
+      await readFile(configPath, "utf-8")
+    } catch {
+      // New file doesn't exist → migrate
+      await mkdir(configDir, { recursive: true })
+      await copyFile(oldConfigPath, configPath)
+      logger.info(`[Config] Migrated config from ultrapress.json to ultrapress.plugin.json`)
+    }
+  } catch { /* no old config, proceed normally */ }
   
   try {
     const fileContent = await readFile(configPath, "utf-8")
@@ -96,7 +111,7 @@ export async function server(ctx: any): Promise<Hooks> {
        }
     } else {
        logger.setLogLevel(baseConfig.enableDebug ? baseConfig.notification : "off")
-       logger.debug(`[Config] Error reading ultrapress.json, using defaults.`)
+       logger.debug(`[Config] Error reading ultrapress.plugin.json, using defaults.`)
     }
   }
 
