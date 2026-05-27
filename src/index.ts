@@ -72,6 +72,10 @@ export async function server(ctx: any): Promise<Hooks> {
     const strippedContent = fileContent.replace(/^\s*\/\/.*$/gm, "")
     const externalConfig = JSON.parse(strippedContent)
     baseConfig = sanitizeConfig(externalConfig)
+    // Write back sanitized config to migrate any new default fields not present in old file
+    try {
+      await writeFile(configPath, JSON.stringify(baseConfig, null, 2), "utf-8")
+    } catch { /* best-effort; in-memory config is already valid */ }
     logger.setLogLevel(baseConfig.enableDebug ? baseConfig.notification : "off")
     logger.info(`[Config] Loaded dedicated config from ${configPath}`)
   } catch (e: any) {
