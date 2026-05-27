@@ -21,11 +21,13 @@
   },
   "files": [
     "dist",
+    "!dist/*.node",
     "ultrapress.schema.json",
     "README.md"
   ],
   "scripts": {
     "build": "tsup",
+    "postbuild": "node -e \"require('fs').readdirSync('dist').filter(f=>f.endsWith('.node')).forEach(f=>require('fs').unlinkSync('dist/'+f))\"",
     "dev": "tsup --watch",
     "test": "bun test",
     "lint": "tsc --noEmit",
