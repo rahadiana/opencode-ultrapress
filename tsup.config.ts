@@ -13,6 +13,11 @@ export default defineConfig({
   outDir: "dist",
   splitting: false,
   treeshake: true,
+  external: [
+    "@huggingface/transformers",
+    "onnxruntime-node",
+    "onnxruntime-web",
+  ],
   define: {
     __ULTRAPRESS_VERSION__: JSON.stringify(pkg.version),
   },
