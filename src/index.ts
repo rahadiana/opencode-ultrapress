@@ -286,31 +286,43 @@ export async function server(ctx: any): Promise<Hooks> {
        try {
           const sessionID = input.sessionID
 
-          // Suppress one immediate assistant follow-up after /up command handling.
-          // This prevents the model from appending unrelated text (e.g. leaked
-          // orchestration instructions) after UltraPress already produced output.
-           if (sessionID && sessionsSuppressCommandFollowup.has(sessionID) && Array.isArray(output?.parts)) {
-              const textPart = output.parts.find((p: any) => p?.type === "text" && typeof p.text === "string")
-              const text = textPart?.text ?? ""
-              const role = output?.message?.role || output?.message?.info?.role
-              const isUltraPressCommandPayload = typeof text === "string" && text.startsWith("[STM: UltraPress handled /up")
+           // Suppress one immediate follow-up after /up command handling.
+           // This prevents the model from appending leaked orchestration text.
+           // chat.message fires for BOTH user and (sometimes) assistant output;
+           // OpenCode may tag the model response as role="user" in command flows,
+           // so we match on content hash rather than role.
+            if (sessionID && sessionsSuppressCommandFollowup.has(sessionID) && Array.isArray(output?.parts)) {
+               const textPartIdx = output.parts.findIndex((p: any) => p?.type === "text" && typeof p.text === "string")
+               const text = textPartIdx >= 0 ? (output.parts[textPartIdx].text as string) : ""
+               const isUltraPressCommandPayload = text.startsWith("[STM: UltraPress handled /up")
 
-              // Drop stale suppress flag when a normal (non-/up) user message arrives.
-              if (!isUltraPressCommandPayload && role === "user") {
-                 sessionsSuppressCommandFollowup.delete(sessionID)
-              }
+               // If this is NOT the /up payload itself, strip leaked patterns from it.
+               if (!isUltraPressCommandPayload && text) {
+                  const stripped = text
+                     .replace(/Example:\s*delegate_task\([\s\S]*?load_skills=\[\]\)\s*[-\n]*/gi, "")
+                     .replace(/MANDATORY delegate_task params[\s\S]*?run_in_background when calling delegate_task\.\s*[-]*/gi, "")
+                     .trim()
 
-              // Suppress the first non-user output after /up.
-              // Some OpenCode versions don't set message.role as "assistant",
-              // so we match on role !== "user" (i.e. assistant, system, or undefined).
-              if (!isUltraPressCommandPayload && role !== "user") {
-                 output.parts.length = 0
-                 output.parts.push({ type: "text", text: "\u200b" })
-                 sessionsSuppressCommandFollowup.delete(sessionID)
-                 logger.info("[Command] Suppressed immediate assistant follow-up after /up.")
-                 return
-              }
-           }
+                  if (stripped.length === 0 || stripped.startsWith("[STM:")) {
+                     // Nothing left after stripping → suppress entirely
+                     output.parts.length = 0
+                     output.parts.push({ type: "text", text: "\u200b" })
+                     logger.info("[Command] Suppressed emptied follow-up after /up.")
+                  } else if (stripped !== text) {
+                     // Stripped leaked text but kept real content
+                     output.parts[textPartIdx].text = stripped
+                     logger.info("[Command] Stripped leaked text from /up follow-up.")
+                  }
+
+                  sessionsSuppressCommandFollowup.delete(sessionID)
+                  return
+               }
+
+               // If this IS the /up payload, keep it visible and drop the flag.
+               if (isUltraPressCommandPayload) {
+                  sessionsSuppressCommandFollowup.delete(sessionID)
+               }
+            }
 
            // SYNC HISTORY + REAL TOKENS: First call fetches real token counts
            // from OpenCode API (AssistantMessage.tokens) and estimates for fallback.
@@ -502,10 +514,11 @@ export async function server(ctx: any): Promise<Hooks> {
                   ""
                ).trim()
 
-               // Strip leaked orchestration boilerplate (MANDATORY delegate_task params, ANALYSIS MODE, etc.)
-               // that oh-my-openagent injects into the system prompt and the model echoes back.
+               // Strip leaked orchestration boilerplate from oh-my-openagent system prompt
+               // that the model echoes back (MANDATORY delegate_task params, Example: delegate_task(...),
+               // ANALYSIS MODE / SEARCH MODE blocks, etc.)
                part.text = part.text.replace(
-                  /MANDATORY delegate_task params[\s\S]*?run_in_background when calling delegate_task\.\s*/gi,
+                  /(?:MANDATORY delegate_task params[\s\S]*?run_in_background when calling delegate_task\.|Example:\s*delegate_task\([\s\S]*?load_skills=\[\]\))[\s]*---?[\s]*/gi,
                   ""
                ).trim()
 
