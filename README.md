@@ -608,18 +608,18 @@ npm run benchmark
 
 ```
 ┌────────────────────────────────┬──────────────────────────────────────────┬────────────┬──────────────┬──────────┐
-│ Fixture                        │ Layer                                    │ Original   │ Compressed   │ Savings  │
+│Fixture                         │Layer                                     │Original    │Compressed    │Savings   │
 ├────────────────────────────────┼──────────────────────────────────────────┼────────────┼──────────────┼──────────┤
-│ git-diff-large.txt             │ L1 — Git Filter                          │      1,657 │          969 │      42% │
-│ npm-install-log.txt            │ L1 — Generic Filter                      │        431 │          430 │       0% │
-│ pytest-log.txt                 │ L1 — Generic Filter                      │      1,200 │        1,199 │       0% │
-│ chat-history.json              │ L2 — NLP Semantic                        │        625 │          490 │      22% │
-│ dcp-conversation.json          │ L3 — DCP Pruning (14→summary)            │      2,347 │          645 │      73% │
-│                                │   ↳ 13 msg removed, 1 summary injected   │            │              │          │
-│ 3x identical npm test          │ L4 — Tool Call Dedup                     │      2,244 │          854 │      62% │
-│                                │   ↳ 2 duplicates collapsed               │            │              │          │
-│ 5 errors × 6 turns             │ L4 — Error Auto-Purge                    │        845 │            0 │     100% │
-│                                │   ↳ 5 errors purged after threshold      │            │              │          │
+│git-diff-large.txt              │L1 — Git Filter                           │       1,657│           969│       42%│
+│npm-install-log.txt             │L1 — Generic Filter                       │         431│           430│        0%│
+│pytest-log.txt                  │L1 — Generic Filter                       │       1,200│         1,199│        0%│
+│chat-history.json               │L2 — NLP Semantic                         │         625│           490│       22%│
+│dcp-conversation.json           │L3 — DCP Pruning (14→summary)             │       2,347│           645│       73%│
+│                                │  ↳ 10 msg removed, 1 summary injected    │            │              │          │
+│3x identical npm test           │L4 — Tool Call Dedup                      │       2,244│           854│       62%│
+│                                │  ↳ 2 duplicates collapsed                │            │              │          │
+│5 errors × 6 turns              │L4 — Error Auto-Purge                     │         845│             0│      100%│
+│                                │  ↳ 5 errors purged after threshold       │            │              │          │
 └────────────────────────────────┴──────────────────────────────────────────┴────────────┴──────────────┴──────────┘
 
 ✅ Total: 9,349 → 4,587 tokens (51% overall savings)
@@ -631,7 +631,7 @@ npm run benchmark
 | :--- | :--- | :--- | :--- |
 | **L1** Output Filter | 3 fixtures | **21%** | Most effective for verbose CLI logs (`git diff`: 42%). Short output less affected. |
 | **L2** Semantic NLP | 1 fixture | **22%** | Consistently compresses natural language without destroying meaning. Code blocks fully protected. |
-| **L3** DCP Pruning | 1 fixture | **73%** | Biggest saver — removes 14 old messages & replaces with 1 summary. Compounding effect in long sessions. |
+| **L3** DCP Pruning | 1 fixture | **73%** | Biggest saver — removes 10 old messages & replaces with 1 summary. Compounding effect in long sessions. |
 | **L4** Auto Cleanup | 2 fixtures | **72%** | Dedup saves 62% from repeated tool calls. Error purge 100% after threshold. |
 
 > 💡 **Insight**: L3 (DCP) is the layer with the highest savings because it removes old messages in bulk. In long sessions (100+ messages), the cumulative effect of L3 + L4 can reach **70-90% token savings**. Dataset and scripts are in [`benchmarks/`](./benchmarks/) — contribute fixtures from your stack for more representative results.
