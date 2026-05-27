@@ -37,14 +37,31 @@ export function processTurnForDCP(
 
 // ─── Auto-Compress (replaces nudge) ──────────────────────────────────────
 
-/** Minimum eligible messages before auto-compress triggers. Below this, the
- *  prompt-token cost of creating a compression block exceeds the savings. */
-const MIN_AUTO_BATCH = 5
+/** Minimum total token count of the eligible batch before auto-compress triggers.
+ *  Below ~500 tokens, the prompt overhead of creating a block exceeds the savings.
+ *  500 tokens ≈ 1 user prompt worth of text; small-talk (< 50 tokens) never triggers. */
+const MIN_AUTO_TOKEN_BATCH = 500
+
+/** Extract text content from a message's parts for token estimation. */
+function extractMessageText(msg: { parts?: any[] }): string {
+  if (!msg.parts) return ""
+  const chunks: string[] = []
+  for (const p of msg.parts) {
+    if (p.type === "text" && typeof p.text === "string") {
+      chunks.push(p.text)
+    }
+  }
+  return chunks.join("\n")
+}
 
 /**
  * Auto-compress old messages when context is approaching limit.
  * Creates compression blocks for messages outside the preserveLastN window
  * that haven't been compressed yet. Returns count of messages compressed.
+ *
+ * Uses token-aware thresholding: skips batches whose total token content is
+ * below MIN_AUTO_TOKEN_BATCH, even if many messages exist. This prevents
+ * compressing small-talk ("hai", "ok") that costs more to compress than keep.
  *
  * Called from chat.message hook BEFORE the nudge check. If this returns > 0,
  * the nudge prompt is suppressed (auto-compress happened instead).
@@ -68,6 +85,7 @@ export function autoCompressMessages(
 
   const eligibleIds: string[] = []
   const extendedIds: string[] = []
+  let eligibleTokenTotal = 0
 
   for (let i = 0; i < strictCutoff; i++) {
     const msg = messages[i]
@@ -75,6 +93,7 @@ export function autoCompressMessages(
     if (!msgId) continue
     if (isMessageCompressed(msgId)) continue
     eligibleIds.push(msgId)
+    eligibleTokenTotal += estimateTokens(extractMessageText(msg))
   }
 
   // Also compress messages in the extended zone (between strictCutoff and extendedCutoff)
@@ -86,15 +105,17 @@ export function autoCompressMessages(
       if (!msgId) continue
       if (isMessageCompressed(msgId)) continue
       extendedIds.push(msgId)
+      eligibleTokenTotal += estimateTokens(extractMessageText(msg))
     }
   }
 
   // Merge strict + extended (strict first, extended second)
   const allEligible = [...eligibleIds, ...extendedIds]
 
-  // Skip if batch is too small — compressing 1-4 messages costs more
-  // prompt tokens than just keeping them in context.
-  if (allEligible.length < MIN_AUTO_BATCH) return 0
+  // Token-aware skip: if total content is below threshold, the prompt-token
+  // cost of compression exceeds the savings. Protects against compressing
+  // small-talk conversations ("hai", "ok", "sip") where 10 messages = ~30 tokens.
+  if (eligibleTokenTotal < MIN_AUTO_TOKEN_BATCH) return 0
 
   // Create a single compression block for all eligible messages
   const firstId = allEligible[0]
@@ -105,7 +126,7 @@ export function autoCompressMessages(
 
   createBlock(topic, firstId, lastId, summary, summaryTokens, allEligible, [], [])
 
-  logger.info(`[L3] Auto-compressed ${allEligible.length} old messages into block${extendedIds.length > 0 ? ` (${eligibleIds.length} strict + ${extendedIds.length} extended)` : ''} (${firstId}..${lastId})`)
+  logger.info(`[L3] Auto-compressed ${allEligible.length} messages (~${eligibleTokenTotal} tokens) into block${extendedIds.length > 0 ? ` (${eligibleIds.length} strict + ${extendedIds.length} extended)` : ''} (${firstId}..${lastId})`)
 
   return allEligible.length
 }
