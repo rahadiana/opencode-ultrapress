@@ -97,6 +97,7 @@ function sanitizeSummarization(value: unknown, fallback: SummarizationConfig): S
   return {
     enabled: asBoolean(input.enabled, fallback.enabled),
     preserveLastN: Math.floor(asNumber(input.preserveLastN, fallback.preserveLastN, { min: 0 })),
+    scoreThreshold: asNumber(input.scoreThreshold, fallback.scoreThreshold, { min: 0, max: 1 }),
   }
 }
 
