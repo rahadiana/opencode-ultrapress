@@ -1,292 +1,268 @@
 /**
- * Message Pruning — removes compressed messages from the message array
- * and replaces them with a synthetic summary message.
+ * Message Pruning — DCP-style placeholder replacement.
  *
- * Supports two strategies:
- * 1. preserveLastN — simple recency cutoff (binary)
- * 2. Multi-signal scoring — per-message importance for partial-block pruning
+ * Instead of removing messages from the array (which breaks array length
+ * and causes model confusion), we replace each compressed message's
+ * content with a compact placeholder and store original content in
+ * persistent JSON storage for Reversible expansion.
+ *
+ * Key insight from opencode-dynamic-context-pruning:
+ * - Keep the messages array exactly the same length
+ * - Replace tool outputs with `[Old tool result content cleared]`
+ * - Replace text content with brief placeholders
+ * - Original content lives in JSON storage, not LLM context
+ *
+ * Matching strategy:
+ * Instead of relying on message IDs (which differ between session.messages()
+ * and output.messages in the transform hook), we use position-based matching.
+ * Messages before the last `preserveLastN` are compressed positionally.
+ * This is deterministic and ID-independent.
  */
 
 import type { CompressionBlock } from "./compress-state.js"
 import * as CompressState from "./compress-state.js"
-import { isProtectedTool } from "./protected-content.js"
-import { scoreMessage, type MessageMeta } from "./scorer.js"
-import * as logger from "../utils/logger.js"
-import { estimateTokens } from "../utils/token-count.js"
+import type { CompressedMessageEntry, SessionStorage } from "./storage.js"
 
-export interface MessageLike {
-  id: string
-  role?: string
-  parts?: any[]
-  content?: string
-  info?: { id?: string; role?: string }
+/**
+ * Placeholder text used when replacing compressed tool output parts.
+ * Must be very compact to maximize token savings.
+ */
+const TOOL_OUTPUT_PLACEHOLDER = "[Old tool result content cleared]"
+
+/**
+ * How many chars of the summary to include in the text placeholder.
+ */
+const SUMMARY_PREVIEW_MAX_CHARS = 120
+
+/**
+ * Truncate a string for placeholder use.
+ */
+function truncateSummary(text: string, max = SUMMARY_PREVIEW_MAX_CHARS): string {
+  if (text.length <= max) return text
+  return text.slice(0, max - 3) + "..."
 }
 
-const IMPORTANT_CONTEXT_MARKERS = [
-  /(?:^|\s)(TODO|FIXME|HACK)\b/i,
-  /\bACTION\s+ITEM\b/i,
-  /\bROOT\s+CAUSE\b/i,
-  /\bRCA\b/i,
-  /\bDECISION(?:\s+LOG)?\b/i,
-  /\bBLOCKER\b/i,
-]
+/**
+ * Replace the content of a compressed message with a placeholder.
+ * Returns a CompressedMessageEntry containing both the placeholder
+ * and the original content for storage.
+ */
+function replaceWithPlaceholder(
+  msg: any,
+  block: CompressionBlock,
+): CompressedMessageEntry {
+  // Extract original content before replacement
+  const originalContent = typeof msg.content === "string" ? msg.content : undefined
+  const originalParts = msg.parts ? JSON.parse(JSON.stringify(msg.parts)) : undefined
 
-function getMessageText(msg: MessageLike): string {
-  const contentChunks: string[] = []
+  // Build placeholder based on role
+  const role = msg.info?.role || msg.role || "unknown"
+  const summaryPreview = truncateSummary(block.summary)
 
-  if (typeof msg.content === "string" && msg.content.length > 0) {
-    contentChunks.push(msg.content)
+  let placeholder: string
+
+  if (role === "assistant") {
+    placeholder = `[Compressed: ${block.topic} — ${summaryPreview}]`
+  } else if (role === "user") {
+    placeholder = `[Compressed user message: ${block.topic} — ${summaryPreview}]`
+  } else {
+    placeholder = `[Compressed: ${block.topic}]`
   }
 
-  if (msg.parts) {
+  // Replace the message content
+  if (typeof msg.content === "string") {
+    msg.content = placeholder
+  }
+
+  // Replace parts — keep structure but shrink tool outputs
+  if (msg.parts && Array.isArray(msg.parts)) {
     for (const part of msg.parts) {
+      if (part.type === "tool" && part.state?.status === "completed") {
+        part.state.output = TOOL_OUTPUT_PLACEHOLDER
+      }
       if (part.type === "text" && typeof part.text === "string") {
-        contentChunks.push(part.text)
+        part.text = placeholder
       }
     }
-  }
-
-  return contentChunks.join("\n")
-}
-
-function hasImportantMarker(msg: MessageLike): boolean {
-  const text = getMessageText(msg)
-  if (!text) return false
-  return IMPORTANT_CONTEXT_MARKERS.some((pattern) => pattern.test(text))
-}
-
-// ─── MessageLike → MessageMeta conversion ───────────────────────────────
-
-function toMeta(msg: MessageLike, index: number, total: number): MessageMeta {
-  let tool: string | undefined
-  let content = msg.content || ""
-  const msgId = msg.info?.id || msg.id
-  const msgRole = msg.info?.role || msg.role || "unknown"
-  if (msg.parts) {
-    for (const part of msg.parts) {
-      if (part.type === "tool" && part.tool) tool = part.tool
-      if (part.type === "text" && !content) content = part.text || content
-    }
-  }
-  return { id: msgId, role: msgRole, tool, content, index, totalMessages: total }
-}
-
-// ─── Main Pruning Entry ─────────────────────────────────────────────────
-
-// ─── Already-pruned block tracking ──────────────────────────────────────
-const prunedBlockIds = new Set<number>()
-
-/**
- * Reset pruning state (for testing / session reset).
- */
-export function resetPruneState(): void {
-  prunedBlockIds.clear()
-}
-
-/**
- * Prune compressed messages from the messages array.
- *
- * Uses in-place mutation (messages.length = 0; messages.push(...)) which
- * preserves the array reference OpenCode's pipeline holds — unlike
- * reassigning output.messages which would break the LLM pipeline.
- *
- * @param preserveLastN - Keep last N messages safe from pruning (0 = disable)
- * @param scoreThreshold - If > 0, use multi-signal scoring. Messages scoring
- *   above this threshold are preserved even if inside a compression block.
- *   Default 0 = no scoring (binary preserveLastN only).
- * @returns number of tokens removed (estimated from summary token count)
- */
-export function applyPruning(
-  messages: MessageLike[],
-  preserveLastN: number = 0,
-  scoreThreshold: number = 0,
-  onBlockPruned?: (blockId: number, removedMessages: MessageLike[]) => void,
-): { prunedCount: number; injectedCount: number; estimatedTokensSaved: number } {
-  const blocks = CompressState.getAllBlocks()
-  if (blocks.length === 0) return { prunedCount: 0, injectedCount: 0, estimatedTokensSaved: 0 }
-
-  // Calculate cutoff index: messages at or after this index are preserved
-  const cutoffIdx = preserveLastN > 0 ? Math.max(0, messages.length - preserveLastN) : 0
-
-  // Build score-based keep set if scoring is enabled
-  let scoreKeepIds: Set<string> | undefined
-  if (scoreThreshold > 0) {
-    scoreKeepIds = new Set()
-    const metas = messages.map((m, i) => toMeta(m, i, messages.length))
-    for (const meta of metas) {
-      const s = scoreMessage(meta)
-      if (s >= scoreThreshold) {
-        scoreKeepIds.add(meta.id)
-      }
-    }
-    const scoredCount = scoreKeepIds.size
-    if (scoredCount > 0) {
-      logger.debug(`[Prune] Scoring keeps ${scoredCount}/${messages.length} messages (threshold ${scoreThreshold})`)
-    }
-  }
-
-  let prunedCount = 0
-  let injectedCount = 0
-  let estimatedTokensSaved = 0
-
-  for (const block of blocks) {
-    // Skip blocks that have already been pruned
-    if (prunedBlockIds.has(block.blockId)) continue
-
-    const result = pruneBlock(messages, block, cutoffIdx, scoreKeepIds)
-    prunedCount += result.removed
-    injectedCount += result.injected
-    estimatedTokensSaved += result.estimatedSavedTokens
-    if (result.removed > 0) {
-      prunedBlockIds.add(block.blockId)
-      if (onBlockPruned && result.removedMessages) {
-        onBlockPruned(block.blockId, result.removedMessages)
-      }
-    }
-  }
-
-  return { prunedCount, injectedCount, estimatedTokensSaved }
-}
-
-/**
- * Find the last user message before a given index, to copy info from
- * for the synthetic summary message.
- */
-function findLastUserMessage(messages: MessageLike[], beforeIdx: number): MessageLike | undefined {
-  for (let i = beforeIdx - 1; i >= 0; i--) {
-    const role = messages[i].info?.role || messages[i].role
-    if (role === "user") return messages[i]
-  }
-  return undefined
-}
-
-/**
- * Create a proper synthetic user message that OpenCode's pipeline can handle.
- * Critical: uses "user" role with proper info object — matches the format
- * that the opencode-dynamic-context-pruning plugin uses successfully.
- */
-function createSummaryMessage(block: CompressionBlock, template?: MessageLike): MessageLike {
-  const effectiveSummary = CompressState.getEffectiveSummary(block.blockId)
-  const summaryText = `[Compressed summary: ${block.topic}] ${effectiveSummary}`
-  const now = Date.now()
-
-  const msgId = `__dcp_summary_${block.blockId}__`
-  const partId = `__prt_dcp_summary_${block.blockId}__`
-
-  const info: Record<string, any> = {
-    id: msgId,
-    role: "user",
-    time: { created: now },
-  }
-
-  // Copy session info from template if available
-  if (template?.info) {
-    const tInfo = template.info as Record<string, any>
-    if (tInfo.sessionID) info.sessionID = tInfo.sessionID
-    if (tInfo.agent) info.agent = tInfo.agent
-    if (tInfo.model) info.model = tInfo.model
   }
 
   return {
-    id: msgId,
-    content: summaryText,
-    info,
-    parts: [
-      {
-        id: partId,
-        messageID: msgId,
-        type: "text" as const,
-        text: summaryText,
-      },
-    ],
+    placeholder,
+    originalContent,
+    originalParts,
   }
-}
-
-function pruneBlock(
-  messages: MessageLike[],
-  block: CompressionBlock,
-  cutoffIdx: number = 0,
-  scoreKeepIds?: Set<string>,
-): { removed: number; injected: number; removedMessages?: MessageLike[]; estimatedSavedTokens: number } {
-  let injectedCount = 0
-  let estimatedSavedTokens = 0
-
-  const resolveId = (m: MessageLike) => m.info?.id || m.id
-  const startIdx = messages.findIndex(m => resolveId(m) === block.startId)
-  const endIdx = messages.findIndex(m => resolveId(m) === block.endId)
-
-  if (startIdx === -1 || endIdx === -1 || startIdx > endIdx) {
-    return { removed: 0, injected: 0, estimatedSavedTokens: 0 }
-  }
-
-  // If scoring is active, build a keep set from block's messages
-  const blockKeepIds = new Set(scoreKeepIds || [])
-
-  // If the block overlaps preserved zone but scoring is active,
-  // we may still partially prune low-scoring messages before the cutoff
-  if (cutoffIdx > 0 && endIdx >= cutoffIdx) {
-    if (!scoreKeepIds || scoreKeepIds.size === 0) {
-      // No scoring — skip entire block (legacy behavior)
-      return { removed: 0, injected: 0, estimatedSavedTokens: 0 }
-    }
-    // With scoring: we can still prune messages within this block
-    // as long as they're below the score threshold
-  }
-
-  // Use block's directMessageIds (not index range) to find removable messages.
-  // Index-based slicing (slice(startIdx+1, endIdx)) fails for 1-2 message blocks
-  // where start and end are adjacent/identical — range is empty, nothing gets pruned.
-  // Using message IDs directly works for ANY block size.
-  const blockIdSet = new Set(block.directMessageIds)
-  blockIdSet.delete(block.startId) // Keep startId as anchor for summary insertion
-
-  const toRemove: MessageLike[] = []
-  for (const msg of messages) {
-    const mid = msg.info?.id || msg.id
-    if (!blockIdSet.has(mid)) continue
-    if (isProtectedMessage(msg)) continue
-    if (blockKeepIds.has(mid)) continue
-    toRemove.push(msg)
-  }
-
-  if (toRemove.length === 0) return { removed: 0, injected: 0, estimatedSavedTokens: 0 }
-
-  const removedTokenEstimate = toRemove.reduce((sum, msg) => sum + estimateTokens(getMessageText(msg)), 0)
-
-  const removeIds = new Set(toRemove.map(m => m.info?.id || m.id))
-  const result = messages.filter(m => !removeIds.has(m.info?.id || m.id))
-
-  // Create synthetic user message with proper OpenCode format
-  const userTemplate = findLastUserMessage(messages, startIdx)
-  const summaryMsg = createSummaryMessage(block, userTemplate)
-  const summaryText = (summaryMsg.parts?.[0] as any)?.text || ""
-  const summaryTokenEstimate = estimateTokens(summaryText)
-  estimatedSavedTokens = Math.max(0, removedTokenEstimate - summaryTokenEstimate)
-
-  const insertAfter = result.findIndex(m => (m.info?.id || m.id) === block.startId)
-  if (insertAfter >= 0) {
-    result.splice(insertAfter + 1, 0, summaryMsg)
-    injectedCount = 1
-  }
-
-  // In-place mutation — preserves the array reference OpenCode's pipeline holds
-  messages.length = 0
-  messages.push(...result)
-
-  return { removed: toRemove.length, injected: injectedCount, removedMessages: toRemove, estimatedSavedTokens }
 }
 
 /**
- * Check if a message should be protected from pruning.
+ * Generate a deterministic internal ID for a message based on its
+ * position from the end of the array. Used for storage indexing.
  */
-function isProtectedMessage(msg: MessageLike): boolean {
-  if (hasImportantMarker(msg)) return true
+function makeMsgId(index: number, total: number): string {
+  return `up_pos_${total - 1 - index}`
+}
 
-  if (!msg.parts) return false
-  for (const part of msg.parts) {
-    if (part.type === "tool") {
-      if (isProtectedTool(part.tool)) return true
+/**
+ * Apply DCP-style compression to messages:
+ * Replace compressed message content with placeholders instead of removing them.
+ *
+ * Uses position-based matching (from end of array) rather than message IDs.
+ * Messages beyond preserveLastN from the end are eligible for compression.
+ *
+ * @param messages - The messages array (mutated in-place)
+ * @param preserveLastN - Number of recent messages to preserve
+ * @param storage - Session storage for saving original content
+ * @returns Number of compressed message entries saved
+ */
+export function applyPlaceholderCompression(
+  messages: any[],
+  preserveLastN: number = 0,
+  storage?: SessionStorage,
+): { compressedCount: number; estimatedTokensSaved: number } {
+  if (messages.length === 0) return { compressedCount: 0, estimatedTokensSaved: 0 }
+
+  const total = messages.length
+  const cutoff = preserveLastN >= 0 ? Math.max(0, total - preserveLastN) : 0
+
+  // Messages beyond the preserve window from the end are compressible
+  const compressibleEnd = cutoff
+
+  if (compressibleEnd <= 0) return { compressedCount: 0, estimatedTokensSaved: 0 }
+
+  // Get existing blocks (from auto-compress in chat.message hook)
+  const blocks = CompressState.getAllBlocks()
+  const hasBlocks = blocks.length > 0
+
+  let compressedCount = 0
+  let estimatedTokensSaved = 0
+
+  for (let i = 0; i < compressibleEnd; i++) {
+    const msg = messages[i]
+    if (!msg) continue
+
+    // Skip non-compressible roles (system prompts, etc.)
+    const role = msg.info?.role || msg.role || "unknown"
+    if (role === "system" || role === "context") continue
+
+    // Use position-based ID for storage indexing
+    const posId = makeMsgId(i, total)
+
+    // Check if already compressed (either by block ID or position ID)
+    const isAlreadyCompressed = storage?.compressedMessages?.[posId]
+    if (isAlreadyCompressed && msg.content?.startsWith?.("[Compressed:")) {
+      // Already handled
+      compressedCount++
+      continue
     }
+
+    // Find matching block (if blocks exist) for topic/summary
+    let block: CompressionBlock | undefined
+
+    if (hasBlocks) {
+      // Try to match by position — blocks are ordered chronologically
+      // Block index roughly corresponds to position in message array
+      // Use the first block that hasn't been fully consumed yet
+      for (const b of blocks) {
+        const firstBlockIdx = messages.findIndex((m) => {
+          const mId = m.info?.id || m.id
+          return mId && b.directMessageIds.includes(mId)
+        })
+        if (firstBlockIdx >= 0 && firstBlockIdx <= i) {
+          block = b
+          break
+        }
+      }
+    }
+
+    // If no matching block, create a minimal virtual block on-the-fly
+    // using the message's own content as summary
+    if (!block) {
+      const msgText = msg.content || ""
+      const summary = msgText.slice(0, SUMMARY_PREVIEW_MAX_CHARS)
+      // Create inline block — just enough for placeholder construction
+      block = {
+        blockId: -1,
+        topic: "auto-compressed",
+        startId: posId,
+        endId: posId,
+        summary,
+        summaryTokens: 0,
+        directMessageIds: [posId],
+        consumedBlockIds: [],
+        preservedToolIds: [],
+        createdAt: Date.now(),
+      }
+    }
+
+    // Replace with placeholder — block is guaranteed set here
+    const entry = replaceWithPlaceholder(msg, block!)
+
+    // Store original content in session storage
+    if (storage) {
+      storage.compressedMessages[posId] = {
+        placeholder: entry.placeholder,
+        originalContent: entry.originalContent,
+        originalParts: entry.originalParts,
+      }
+    }
+
+    // Also store rawContent if it's a string message (newer format)
+    compressedCount++
+
+    // Estimate tokens saved
+    const originalLen = (entry.originalContent || "").length +
+      (entry.originalParts ? JSON.stringify(entry.originalParts).length : 0)
+    const placeholderLen = entry.placeholder.length
+    estimatedTokensSaved += Math.round((originalLen - placeholderLen) / 4)
   }
-  return false
+
+  return { compressedCount, estimatedTokensSaved }
+}
+
+/**
+ * Restore original content for a specific message (for Reversible expand tool).
+ *
+ * @param msgId - The message ID to restore
+ * @param msg - The message object to restore content into
+ * @param storage - Session storage containing original content
+ * @returns true if the message was restored
+ */
+export function restoreMessageContent(
+  msgId: string,
+  msg: any,
+  storage: SessionStorage,
+): boolean {
+  const entry = storage.compressedMessages[msgId]
+  if (!entry) return false
+
+  // Restore content
+  if (entry.originalContent !== undefined) {
+    msg.content = entry.originalContent
+  }
+
+  // Restore parts
+  if (entry.originalParts !== undefined) {
+    msg.parts = JSON.parse(JSON.stringify(entry.originalParts))
+  }
+
+  // Remove from compressed messages (no longer compressed)
+  delete storage.compressedMessages[msgId]
+
+  return true
+}
+
+/**
+ * Get placeholder info for a compressed message.
+ */
+export function getCompressedEntry(
+  msgId: string,
+  storage: SessionStorage,
+): CompressedMessageEntry | undefined {
+  return storage.compressedMessages[msgId]
+}
+
+/**
+ * Get count of compressed messages.
+ */
+export function getCompressedCount(storage: SessionStorage): number {
+  return Object.keys(storage.compressedMessages).length
 }

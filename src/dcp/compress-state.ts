@@ -154,6 +154,42 @@ export function findBlock(query: string): CompressionBlock | undefined {
   return undefined
 }
 
+/**
+ * Get block counter value (for serialization).
+ */
+export function getBlockCounter(): number {
+  return blockCounter
+}
+
+/**
+ * Set block counter value (for deserialization).
+ */
+export function setBlockCounter(value: number): void {
+  blockCounter = value
+}
+
+/**
+ * Export all blocks as a plain array (for JSON storage).
+ */
+export function exportBlocks(): CompressionBlock[] {
+  return Array.from(blocksById.values())
+}
+
+/**
+ * Load blocks from a saved array into the in-memory state.
+ * Rebuilds all index maps.
+ */
+export function importBlocks(blocks: CompressionBlock[]): void {
+  for (const block of blocks) {
+    blocksById.set(block.blockId, block)
+    for (const msgId of block.directMessageIds) {
+      const existing = blocksByMessageId.get(msgId) || []
+      existing.push(block.blockId)
+      blocksByMessageId.set(msgId, existing)
+    }
+  }
+}
+
 /** Reset all state (for testing) */
 export function resetCompressionState(): void {
   blockCounter = 0

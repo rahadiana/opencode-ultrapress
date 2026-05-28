@@ -1,77 +1,23 @@
 /**
- * Context Monitoring & Nudging System.
+ * Context Monitoring — Real Token Tracking
  *
- * Tracks context tokens using:
- * - Real API data from AssistantMessage.tokens when available (set via setRealContextTokens)
- * - Estimated token count as fallback (set via updateContextTokens / resetContextTokens)
+ * Tracks real context token counts from the OpenCode API.
+ * Used by /up stats display.
  */
 
-import type { SummarizationConfig } from "../config/schema.js"
-
-// Estimated token tracking (fallback when real API data is unavailable)
-let currentContextTokens = 0
-let turnCount = 0
-
-// Real token tracking (from AssistantMessage.tokens API data)
+// ─── Real token tracking (from API) ──────────────────────────────────────
 let realInputTokens = 0
 let realOutputTokens = 0
-let hasRealData = false
 
-export function updateContextTokens(delta: number) {
-  currentContextTokens = Math.max(0, currentContextTokens + delta)
+export function setRealContextTokens(inputTokens: number, outputTokens: number) {
+  if (inputTokens > 0) realInputTokens = inputTokens
+  if (outputTokens > 0) realOutputTokens = outputTokens
 }
 
-export function resetContextTokens(amount: number = 0) {
-  currentContextTokens = amount
-}
-
-export function resetTurnCount(count: number = 0) {
-  turnCount = count
-}
-
-/**
- * Set real token counts from OpenCode API (AssistantMessage.tokens).
- * When real data is available, it overrides the estimated count for nudge decisions.
- */
-export function setRealContextTokens(input: number, output: number): void {
-  realInputTokens = input
-  realOutputTokens = output
-  hasRealData = true
-  // Sync the estimated counter to real input tokens for nudge consistency
-  currentContextTokens = input
-}
-
-export function getContextTokens(): { estimated: number; realInput: number; realOutput: number; hasRealData: boolean } {
+export function getContextTokens() {
   return {
-    estimated: currentContextTokens,
     realInput: realInputTokens,
     realOutput: realOutputTokens,
-    hasRealData,
+    hasRealData: realInputTokens > 0 || realOutputTokens > 0,
   }
-}
-
-export function checkNudgeRequired(config: SummarizationConfig): boolean {
-  if (!config.enabled) return false
-  
-  turnCount++
-  
-  if (turnCount % config.nudgeFrequency === 0) {
-    // Use real input tokens when available, otherwise fall back to estimated
-    const effectiveContext = hasRealData ? realInputTokens : currentContextTokens
-    // Pre-emptive nudge at configurable threshold (default 70%) of limit
-    const threshold = config.nudgeThreshold ?? 0.70
-    const preemptiveLimit = Math.floor(config.maxContextLimit * threshold)
-    if (effectiveContext > preemptiveLimit) {
-      return true
-    }
-  }
-  
-  return false
-}
-
-export function buildNudgePrompt(config: SummarizationConfig): string {
-  const source = hasRealData ? "actual" : "estimated"
-  return `[SYSTEM ALERT: CONTEXT WINDOW LARGE]
-Current active context size (${source}) is approaching the limit (${config.maxContextLimit} tokens).
-To prevent context overflow and preserve important facts, PLEASE CALL the 'ultrapress_compress' tool immediately to summarize stale spans of this conversation.`
 }
