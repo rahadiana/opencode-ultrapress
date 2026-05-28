@@ -167,6 +167,7 @@ The most powerful layer. **Removes old messages from the context window** and re
 | :--- | :--- | :--- | :--- |
 | `summarization.enabled` | `boolean` | `true` | Enable Layer 3 placeholder compression. |
 | `summarization.preserveLastN` | `number` | `4` | Preserve last N messages from placeholder compression (0 = compress all). Protects recent conversation context. |
+| `summarization.scoreThreshold` | `number` | `0.45` | Score threshold (0.0–1.0) for extended zone pruning. Higher = fewer messages compressed. |
 
 ### Workflow
 
@@ -408,10 +409,11 @@ Recommended for most users. Good token savings with strong context safety.
     "minLengthChars": 250
   },
 
-    "summarization": {
-      "enabled": true,
-      "preserveLastN": 4
-    },
+  "summarization": {
+    "enabled": true,
+    "preserveLastN": 4,
+    "scoreThreshold": 0.45
+  },
 
   "cleanup": {
     "deduplication": { "enabled": true },
@@ -594,6 +596,7 @@ interface SemanticConfig {
 interface SummarizationConfig {
   enabled: boolean
   preserveLastN: number
+  scoreThreshold: number
 }
 
 interface CleanupConfig {

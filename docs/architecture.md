@@ -1,94 +1,108 @@
-# Architecture — OpenCode UltraPress
+# UltraPress Architecture Overview
 
-## Pipeline Overview
+## What UltraPress aims to solve
 
-Data from every interaction in OpenCode flows through 4 defense layers sequentially. Important: each layer runs on a **different hook**, not within a single pipeline.
+When interacting with codebases via OpenCode, every message carries base tokens, and every tool result is concatenated into history. Over a long session, the cumulative token count can exceed the model's context window, causing:
 
-```mermaid
-flowchart LR
-    subgraph OpenCode Runtime
-        A([Tool Execution]) -->|"tool.execute.after"| L1
-        B([Chat Message]) -->|"chat.message"| L2
-        B -->|"chat.message"| L3
-        C([Session Compacting]) -->|"experimental.session.compacting"| L4_compact
-    end
+- **Lost context** — earlier instructions, error details, or file contents get dropped
+- **Degraded accuracy** — the model starts hallucinating after losing key information
+- **Frustrating restarts** — user must manually summarize and start a new session
 
-    subgraph L1["Layer 1 — Output Filter"]
-        direction TB
-        L1A[Detect command type\ngit/npm/pytest/etc] --> L1B[Apply domain filter\nstrip boilerplate]
-        L1B --> L1C[Middle-out truncate\nif > maxChars]
-    end
+UltraPress solves this by intercepting output at 4 layers and progressively compressing it.
 
-    subgraph L2["Layer 2 — GSC Semantic"]
-        direction TB
-        L2A[Check role & config] --> L2B{Mode?}
-        L2B -->|nlp| L2C[Grammar Stripping\nRule-based]
-        L2B -->|mlm| L2D[AI Tokenizer\nEXPERIMENTAL]
-        L2C & L2D --> L2E[Return compressed\nor original if no savings]
-    end
+## How the 4 layers work
 
-    subgraph L3["Layer 3 — DCP Monitor"]
-        direction TB
-        L3A[Count tokens\nin current message] --> L3B{Above threshold?}
-        L3B -->|yes| L3C[Inject nudge prompt\nto user message]
-        L3B -->|no| L3D[Pass through]
-    end
+Architecture diagram (informal, not pako):
 
-    subgraph L4_compact["Layer 4 — Session Cleanup"]
-        direction TB
-        L4A[Auto error purge\nafter N turns] --> L4B[Dedup repeated\ntool outputs]
-    end
+<image width="350" src="./image/banner.svg" alt="UltraPress Banner" />
 
-    L1 -->|filtered output| OpenCode_Context[(OpenCode\nContext Window)]
-    L2 -->|compressed message| OpenCode_Context
-    L3 -->|nudge injected| OpenCode_Context
-    L4_compact -->|protected context| OpenCode_Context
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           OpenCode AI Process                              │
+│  ┌───────────┐   ┌──────────────┐   ┌────────────┐   ┌──────────────────┐  │
+│  │ L1 Filter │──►│ L2 Caveman   │──►│ L3 DCP     │──►│ L4 Cleanup       │  │
+│  │ (output)  │   │ (semantic)   │   │ (compress) │   │ (post-process)   │  │
+│  └───────────┘   └──────────────┘   └────────────┘   └──────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
----
+### Layer 1 — Output Filter (tool.execute.after)
 
-## Execution Order Per Hook
+Intercepts every tool execution result.
 
-### `tool.execute.after`
-1. **Layer 1** — Filter raw tool output before it enters the context window.
-2. **Layer 4 (Dedup)** — Check if output is identical to previous; if yes, remove.
+- Classifies each tool by name — `bash`, `git`, `read`, `grep`, `glob`, etc.
+- Applies a command-specific filter that keeps only the most relevant lines.
+- Falls back to generic smart truncation for unrecognised tools.
+- When truncation occurs, the full output is tee-saved to a temp file, and the model sees a truncated version with a note reading `[truncated, see path]`.
 
-### `chat.message`
-1. **Layer 3 (DCP)** — Count cumulative token estimate. If approaching limit, inject nudge prompt.
-2. **Layer 2 (GSC Semantic)** — Semantic compression on user/assistant messages that pass role filter & minimum length.
-3. **Layer 4 (Purge)** — Mark old error messages for removal after N turns.
+### Layer 2 — Caveman Semantic (chat.message)
 
-### `experimental.session.compacting` _(if OpenCode supports this hook)_
-- **Layer 3 (Protected Context)** — Inject protected summary so it won't be lost when OpenCode performs auto-compaction.
+Works on message history after it's stored.
 
----
+- **NLP** — TF-IDF sentence scoring (default, no dependencies).
+- **MLM** — Masked Language Model via Transformers.js embeddings.
+- **LLM** — LLM-based summarization.
+- Compresses conversation history to 2–3 sentences.
+- Protects code blocks (``` fences) and error messages from compression.
 
-## Why There Is No Double Compression?
+### Layer 3 — DCP (Dynamic Context Placeholder) (chat.message)
 
-Layer 2 and Layer 3 **do not compress each other** because:
+Compresses stale conversation spans into high-fidelity summaries.
 
-1. **Layer 2** operates on **individual message text** (user message or assistant response).
-2. **Layer 3** only **counts tokens** and inserts new nudge text — it does not re-compress existing text.
-3. Layer 3 declares `ultrapress_compress` as a **tool for the LLM** (not auto-compression). The LLM autonomously calls that tool, not the UltraPress system.
+- **Scorer** (`src/dcp/scorer.ts`): Scores each message by purpose (instructional > diagnostic > summary > context), recency, and role.
+- **Pruner** (`src/dcp/prune.ts`): Selects stale candidates, groups into batches.
+- **Compress State** (`src/dcp/compress-state.ts`): Generates summaries preserving factual information.
+- **Storage** (`src/dcp/storage.ts`): Persists original content for expansion via `ultrapress_expand`.
+- Token-aware: skips auto-compress when batch < 5 messages.
 
----
+Protected content (system prompts, recent messages within `preserveLastN`, critical keywords) is never compressed.
 
-## Error Handling Strategy
+### Layer 4 — Cleanup (tool.execute.after)
 
-| Layer | Behavior on Error |
-| :--- | :--- |
-| Layer 1 | Fallback to raw output — **never crashes** |
-| Layer 2 (NLP) | Fallback to original text — compression considered failed, session continues normally |
-| Layer 2 (MLM) | Fallback to NLP mode — model fails to load, but session keeps running |
-| Layer 3 | Skip nudge — no side effects |
-| Layer 4 | Skip purge — old messages remain |
+Post-filter cleanup that runs alongside L1.
 
-All layers use a `try/catch` pattern that returns the original input (*passthrough*) on failure.
+- **Dedup** — Consecutive identical tool calls are collapsed into one.
+- **Error purge** — Stale error messages older than N turns are removed.
+- Keeps things tidy without affecting model-visible output.
 
----
+## Hook Execution Order
 
-## Known Limitations
+```
+1. command.execute.before      → /up command handling + config persistence
+2. tool.execute.after          → L1 Output Filter + L4 Cleanup
+3. chat.message                → L2 Caveman Semantic + L3 DCP Compression
+4. experimental.chat.messages.transform → Strip mode-injection artifacts
+5. experimental.session.compacting    → Inject protected context during compaction
+```
 
-- **MLM mode** currently uses the model as a more accurate tokenizer, not for full inference. This is an **EXPERIMENTAL** feature. See [MLM Mode](#mlm-mode-experimental) in README.
-- Token counting uses character-based heuristics (3.7 chars/token for prose), not `tiktoken`. ~85-90% accuracy for mixed English/code.
-- The `tool.execute.after` hook only fires if OpenCode calls a tool through the agent loop — does not apply to manual messages.
+## Session Stats Tracking
+
+```
+totalTokensRaw        = Sum of all raw token counts from L1 and L4
+totalTokensCompressed = Sum of all compressed token counts from L1 and L4
+savedByLayer.*        = Per-layer tracked savings (filter, semantic, summarization, cleanup)
+```
+
+Overall savings:
+
+```
+totalSaved  = totalTokensRaw - totalTokensCompressed
+overallPct  = (totalSaved / totalTokensRaw) x 100
+```
+
+L3 (summarization) savings are tracked in `savedByLayer.summarization` and displayed separately in the `/up stats` breakdown as accumulated savings across all compression rounds. L3 does NOT modify `totalTokensCompressed` — that counter reflects only L1/L4 compression.
+
+## File Map
+
+```
+src/
+├── index.ts                    # Plugin entry, hook registration
+├── commands/slash.ts           # /up command handler + stats display
+├── config/                     # Schema, defaults, validation
+├── layers/                     # 4 compression layers
+├── caveman/                    # L2: NLP/MLM/LLM implementations
+├── dcp/                        # L3: scorer, pruner, compression, storage
+├── cleanup/                    # L4: dedup + purge
+├── filters/                    # L1: command-type filters
+└── utils/                      # Logger, token counter
+```

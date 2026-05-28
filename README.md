@@ -512,27 +512,9 @@ opencode plugin remove @tarquinen/opencode-dcp
 opencode plugin @tarquinen/opencode-dcp@latest --global
 ```
 
----
+## Further Reading
 
-## Change History
-
-| Version | Date | Summary |
-|---------|------|---------|
-| **0.2.14** | 2026-05-28 | New comprehensive README. Fixed: stats display `−` → `+`, L3 no longer corrupts `totalTokensCompressed`, added `scoreThreshold` to `SummarizationConfig` type + validation. |
-| **0.2.13** | 2026-05-28 | L3 token-aware threshold (skip auto-compress when batch < 5). Externalize `@huggingface/transformers` from bundle for ONNX runtime resolution. Auto-check npm for newer version. |
-| **0.2.12** | 2026-05-28 | Separate plugin config to `ultrapress.plugin.json`, auto-migration from legacy `ultrapress.json`. |
-| **0.2.11** | 2026-05-28 | Fix `ultrapress.json` → plugin config separation, config migration path. |
-| **0.2.10** | 2026-05-28 | Transformers optional dependency, auto-install fallback, config migration on upgrade. |
-| **0.2.9** | 2026-05-27 | Fix `scoreThreshold` default mismatch (synced code to 0.45). |
-| **0.2.8** | 2026-05-27 | Multi-session stats tracking, subagent usage reporting, npm publish CI pipeline. |
-| **0.2.7** | 2026-05-26 | Broaden `/up` follow-up suppression, strip `[analyze-mode]`/`[search-mode]` injection patterns. |
-| **0.2.6** | 2026-05-25 | `enableDebug` toggle, MLM/LLM import error handling, `/up` handler stabilization. |
-| **0.2.5** | 2026-05-23 | Version bump to align npm with git (no functional changes). |
-| **0.2.4** | 2026-05-23 | Balanced defaults (`preserveLastN: 4`, `scoreThreshold: 0.45`), critical context protection, ONNX thread fix, config validation hardening. |
-| **0.2.3** | 2026-05-22 | Schema guard (block config with undeclared keys), ONNX dispose fix, migration fix. |
-| **0.2.2** | 2026-05-21 | Session resume fix, DCP tool integration (`ultrapress_compress`/`expand`), init script fix. |
-| **0.2.1** | 2026-05-20 | Command fix (slash command handler refactor), system prompt injection, session stats tracking. |
-| **0.2.0** | 2026-05-19 | SemVer reset. L4 cleanup layer, config refactor (layered schema), public README. |
-| **0.1.x** | 2026-03–05 | Initial development: 4-layer pipeline, L1/L2/L3 core, DCP scorer/pruner, `/up` commands, private alpha. |
-
-Full commit history: [GitHub](https://github.com/rahadiana/opencode-ultrapress)
+- **Architecture**: [`docs/architecture.md`](docs/architecture.md) — detailed architecture diagrams and overview
+- **Config Reference**: [`docs/konfigurasi-lengkap.md`](docs/konfigurasi-lengkap.md) — full configuration documentation (Indonesian)
+- **Changelog**: [`CHANGELOG.md`](CHANGELOG.md) — complete version history
+- **Source Code**: [GitHub](https://github.com/rahadiana/opencode-ultrapress)
