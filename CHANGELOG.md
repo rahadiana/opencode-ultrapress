@@ -5,6 +5,26 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.2.14] — 2026-05-28
+
+### Changed
+- Rewrote README with comprehensive architecture docs, file map, changelog
+- Stats display: fix hardcoded `−` sign showing negative savings
+- L3 stats accounting: remove `totalTokensCompressed` corruption — L3 savings tracked in `savedByLayer.summarization` only, overall savings reflect L1/L2/L4 + L3 correctly
+
+## [0.2.13] — 2026-05-28
+
+### Changed
+- L3 token-aware threshold: skip auto-compress when batch < 5 messages
+- Externalize `@huggingface/transformers` from bundle so `onnxruntime` `.node` resolves at runtime
+- Auto-check npm for newer version on startup, warn to clear cache if stale
+- Exclude `.node` binaries from npm package, add postbuild cleanup
+
+## [0.2.12] — 2026-05-28
+
+### Changed
+- Separate plugin config to `ultrapress.plugin.json` with auto-migration from legacy `ultrapress.json`
+
 ## [0.2.11] — 2026-05-28
 
 ### Changed
