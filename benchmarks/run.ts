@@ -17,7 +17,9 @@ import { fileURLToPath } from "url"
 import { compressNLP } from "../src/caveman/nlp.js"
 import { filterGit } from "../src/filters/git.js"
 import { filterGeneric } from "../src/filters/generic.js"
-import { applyPruning } from "../src/dcp/prune.js"
+import { applyPlaceholderCompression } from "../src/dcp/prune.js"
+import { createSessionStorage } from "../src/dcp/storage.js"
+import { resetCompressionState } from "../src/dcp/compress-state.js"
 import { createBlock, resetCompressionState, getAllBlocks } from "../src/dcp/compress-state.js"
 import { deduplicateToolOutput, clearDedupCache, hashToolCall } from "../src/cleanup/dedup.js"
 import { registerToolResult, incrementTurnAndGetPurgeable } from "../src/cleanup/purge-errors.js"
@@ -149,22 +151,21 @@ createBlock(
   [],
 )
 
-// Simulate pruning: keep last 3 messages (msg_018, msg_019, msg_020)
+// Simulate placeholder compression: DCP-style (content replaced, not removed)
 const messagesClone = dcpConvo.map(m => ({ ...m }))
-const { prunedCount, injectedCount } = applyPruning(messagesClone, 3)
+const benchStorage = createSessionStorage("benchmark")
+const { compressedCount } = applyPlaceholderCompression(messagesClone, 4, benchStorage)
 
-// tokensInBlock = total tokens of 14 messages to be pruned
-// summaryTokens = estimated tokens of the summary that replaces them
-const summaryBlock = getAllBlocks()[0]
-const summaryTokens = estimateTokens(summaryBlock.summary)
-const tokensAfterPruning = totalConvoTokens - tokensInBlock + summaryTokens
+// tokensInBlock = total tokens of 14 compressed messages
+// After placeholder compression, each message is ~10 tokens (placeholder) instead of original
+const tokensAfterPlaceholder = totalConvoTokens - (tokensInBlock - compressedCount * 10)
 
 run(
   "dcp-conversation.json",
-  `L3 — DCP Pruning (14→summary) preserveLastN=3`,
+  `L3 — DCP Placeholder Compression (${compressedCount} messages replaced)`,
   totalConvoTokens,
-  tokensAfterPruning,
-  `${prunedCount} msg removed, ${injectedCount} summary injected`,
+  tokensAfterPlaceholder,
+  `${compressedCount} msg replaced with placeholders, array length unchanged`,
 )
 
 // ═══════════════════════════════════════════════════════════════════════════════

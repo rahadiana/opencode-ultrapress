@@ -1,39 +1,14 @@
 /**
- * Layer 3 — Dynamic Context Pruning (DCP)
+ * Layer 3 — DCP Auto-Compress
  *
- * Two responsibilities:
- * 1. Context monitoring + nudge injection
- * 2. experimental.session.compacting — protected context injection
- *
- * Note: Message pruning (applyPruning) is called directly from
- * the chat.message hook in index.ts.
+ * Auto-compress: creates compressed summary blocks via the LLM.
+ * Called from the chat.message hook when token limits are exceeded.
  */
 
 import type { SummarizationConfig, SessionStats } from "../config/schema.js"
-import { checkNudgeRequired, buildNudgePrompt, updateContextTokens } from "../dcp/context-monitor.js"
-import { createBlock, isMessageCompressed, getProtectedContextString } from "../dcp/compress-state.js"
+import { createBlock, isMessageCompressed } from "../dcp/compress-state.js"
 import { estimateTokens } from "../utils/token-count.js"
 import * as logger from "../utils/logger.js"
-
-export interface Layer3Deps {
-  config: SummarizationConfig
-  stats: SessionStats
-}
-
-// ─── Existing: Turn-level nudge ──────────────────────────────────────────
-
-export function processTurnForDCP(
-  currentMessageContent: string, 
-  deps: Layer3Deps
-): { nudgePrompt: string | null } {
-  updateContextTokens(estimateTokens(currentMessageContent))
-
-  if (checkNudgeRequired(deps.config)) {
-    return { nudgePrompt: buildNudgePrompt(deps.config) }
-  }
-
-  return { nudgePrompt: null }
-}
 
 // ─── Auto-Compress (replaces nudge) ──────────────────────────────────────
 
@@ -129,19 +104,4 @@ export function autoCompressMessages(
   logger.info(`[L3] Auto-compressed ${allEligible.length} messages (~${eligibleTokenTotal} tokens) into block${extendedIds.length > 0 ? ` (${eligibleIds.length} strict + ${extendedIds.length} extended)` : ''} (${firstId}..${lastId})`)
 
   return allEligible.length
-}
-
-// ─── Existing: Compacting hook ───────────────────────────────────────────
-
-export function processCompactingHook(sessionId: string, deps: Layer3Deps): string {
-  if (!deps.config.enabled) return ""
-
-  const protectedInfo = getProtectedContextString(sessionId)
-  
-  return `
---- UltraPress DCP Protected Context ---
-The following information must be maintained throughout all compressions:
-${protectedInfo}
-----------------------------------------
-`
 }
