@@ -1,114 +1,204 @@
-# UltraPress — 4-Layer Token Compression for OpenCode AI
+# UltraPress / DCP — Token Compression for OpenCode AI
 
-UltraPress is an OpenCode AI plugin that compresses conversation context in real-time using a 4-layer pipeline. It intercepts tool outputs, chat messages, and compaction events to reduce token consumption without losing critical information.
+A 4-layer token compression plugin for OpenCode AI. Intercepts tool outputs, chat messages, and session compaction events to reduce token consumption without sacrificing information fidelity.
+
+**Published as**: `@tarquinen/opencode-dcp` on npm  
+**Local moniker**: UltraPress (`@rahadiana/opencode-ultrapress`)  
+**Requires**: OpenCode AI with plugin support
+
+---
+
+## Table of Contents
+
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Architecture Overview](#architecture-overview)
+- [Layer Reference](#layer-reference)
+  - [L1 — Output Filter (command-specific truncation)](#l1--output-filter)
+  - [L2 — Caveman Semantic (NLP/MLM/LLM compression)](#l2--caveman-semantic)
+  - [L3 — DCP (Dynamic Context Placeholder)](#l3--dcp-dynamic-context-placeholder)
+  - [L4 — Cleanup (dedup + error purge)](#l4--cleanup)
+- [Commands](#commands)
+- [Hook Map](#hook-map)
+- [Configuration Reference](#configuration-reference)
+- [Development](#development)
+- [Troubleshooting](#troubleshooting)
+- [Change History](#change-history)
+
+---
+
+## Installation
+
+```bash
+# === Published package (recommended) ===
+opencode plugin @tarquinen/opencode-dcp@latest --global
+
+# === Local development / fork ===
+git clone https://github.com/rahadiana/opencode-ultrapress.git
+cd opencode-ultrapress
+npm install
+npm run build
+# Then add to opencode.json:
+#   "plugin": ["/path/to/opencode-ultrapress"]
+```
+
+After installation, restart OpenCode. Verify with:
+
+```
+/up stats
+```
+
+> **After upgrading**: Rebuild (`npm run build` if local) and restart OpenCode. If OpenCode caches the old plugin version, clear your config cache or uninstall/reinstall.
 
 ---
 
 ## Quick Start
 
 ```
-# In OpenCode chat:
-/up enable          # Enable compression
-/up stats           # View compression statistics
-/up config          # View current configuration
+/up                  # Toggle compression on/off
+/up enable           # Enable compression (if disabled)
+/up config           # View current configuration
+/up stats            # Layer-by-layer compression statistics
 ```
 
-### Installation
-
-```bash
-# From npm (published package)
-npm install -g @rahadiana/opencode-ultrapress
-# Then add to opencode.json as a plugin
-
-# From local clone
-cd opencode-ultrapress
-npm install
-npm run build
-# Add as local plugin in opencode.json:
-# { "type": "plugin", "path": "/path/to/opencode-ultrapress" }
-```
-
-> **Note**: After upgrading, run `npm run build` and restart OpenCode. If OpenCode caches the old plugin, clear the cache or reinstall.
-
-### Build / Test Commands
-
-```bash
-npm install       # Install deps (npm lockfile)
-npm run lint      # Typecheck (tsc --noEmit)
-npm test          # Run tests (bun test)
-npm run build     # Build dist/ (tsup, ESM + d.ts)
-npm run benchmark # Run benchmarks (tsx benchmarks/run.ts)
-```
+By default, all 4 layers are enabled with conservative settings:
+- L1 truncates tool outputs >6000 chars
+- L2 compresses conversation messages with TF-IDF scoring (nlp mode)
+- L3 compresses stale message spans into summaries (batch ≥5)
+- L4 deduplicates identical tool calls and purges stale errors
 
 ---
 
-## Architecture
+## Architecture Overview
 
-### Pipeline: L1 Filter → L2 Semantic → L3 DCP → L4 Cleanup
-
-Each layer targets a different compression opportunity:
-
-| Layer | Hook | What It Does |
-|-------|------|--------------|
-| **L1** Output Filter | `tool.execute.after` | Truncates & filters tool output (command-specific) |
-| **L2** Semantic | `chat.message` | NLP scoring & compression of conversation messages |
-| **L3** DCP | `chat.message` | Compresses stale message spans into summaries |
-| **L4** Cleanup | `tool.execute.after` | Deduplicates identical tool calls, purges stale errors |
-
-### Hook Registration (`src/index.ts`)
+The plugin registers 4 hooks across the OpenCode lifecycle. Data flows sequentially through these hooks, each applying a specific compression strategy:
 
 ```
-command.execute.before          → /up command + config persistence
-tool.execute.after              → L1 filtering + L4 cleanup
-chat.message                    → Token sync + L2/L3 + post-command suppression
-experimental.chat.messages.transform → Strip mode-injection artifacts
-experimental.session.compacting → Inject protected context during compaction
+User input
+    │
+    ▼
+command.execute.before  ───  /up command interception + config persistence
+    │
+    ▼
+tool.execute.after      ───  L1: Output filter (truncate + filter cmd output)
+                         ───  L4: Cleanup (dedup identical tool calls, purge errors)
+    │
+    ▼
+chat.message            ───  L2: Semantic compression (NLP/MLM/LLM)
+                         ───  L3: DCP placeholder compression
+                         ───  Token sync + post-command suppression
+    │
+    ▼
+experimental.chat.messages.transform  ───  Strip mode-injection artifacts
+    │
+    ▼
+experimental.session.compacting       ───  Inject protected context during compaction
+    │
+    ▼
+Model receives compressed context
 ```
 
-Custom tools registered: `ultrapress_compress`, `ultrapress_expand`
+### Compression Pipeline Per Layer
+
+```
+              L1                  L2                  L3                  L4
+Tool Output ─────► Truncate ─────► (semantic) ─────► DCP Summary ─────► Dedup
+                      │               │                  │                  │
+                      ▼               ▼                  ▼                  ▼
+                100 chars      20 tokens            "summary:   First unique
+                "build OK"     compress              build fix"   tool call only
+```
+
+### Token Flow Accounting
+
+Stats are tracked by hook:
+
+| Source | `totalTokensRaw` | `totalTokensCompressed` | `savedByLayer.*` |
+|--------|:---:|:---:|:---:|
+| L1 (tool.execute.after) | +raw | +compressed | +saved |
+| L2 (chat.message) | — | — | +saved |
+| L3 (chat.message) | — | — | +saved (accumulated) |
+| L4 (tool.execute.after) | +raw | +compressed | +saved |
+
+L3 savings are accumulated across all compression rounds (not current session state) because L3 compresses chat messages from session storage that have already been counted by L1/L2. Use `/up stats` to view the breakdown.
 
 ---
 
-## Layer Details
+## Layer Reference
 
-### L1 — Output Filter (`src/layers/layer1-output-filter.ts`)
+### L1 — Output Filter
 
-Intercepts tool outputs and applies command-specific filters:
+**File**: `src/layers/layer1-output-filter.ts`  
+**Hooks into**: `tool.execute.after`
 
-- **Bash**: Detects build/docker/grep/generic commands — keeps only errors, warnings, final status
-- **Git**: `status` → compact file list, `diff` → changed lines only, `log` → one-liners, `add/commit/push` → summary
-- **Filesystem**: `ls/find/tree/cat` — dedup, group by directory, limit per file
-- **Test runners**: Jest/Vitest/Pytest/Cargo/Bun — failures + summary only, strips pass lines
-- **Generic fallback**: Strip ANSI, dedup lines, collapse blanks, smart truncate (head 70% + tail 25%)
+Applies command-specific output filtering. Each command type has a custom filter:
 
-Config: `maxCharsPerOutput` (default 6000), `skipTools`, `teeSaveOnTruncate`, custom regex filters.
+| Command Pattern | Filter Behavior |
+|----------------|-----------------|
+| `bash` (build) | Strip HEADER/SUMMARY/FILES, keep errors + final status line |
+| `bash` (docker) | Strip tags/registry/config, keep errors + image ID |
+| `bash` (grep) | Strip empty results, keep total count |
+| `git status` | Compact to 1 file per line, strip empty sections |
+| `git diff` | Only changed lines (`+`/`-`), collapse unchanged |
+| `git log` | One-liner format: `hash date message` |
+| `git add/commit/push` | Single-line summary |
+| `ls/find/tree/cat` | Dedup paths, group by directory, max 3 files per dir |
+| `cat` (single file) | Keeps content verbatim |
+| Jest/Vitest/Pytest/Cargo/Bun | Only failures + summary line, strip passing tests |
+| **Generic fallback** | Strip ANSI escape codes, dedup consecutive blank lines, collapse repeating non-blank lines, smart truncate (head 70% + tail 25%) |
 
-### L2 — Semantic (`src/layers/layer2-caveman.ts`, `src/caveman/`)
+**Config**: `outputFilter.maxCharsPerOutput`, `outputFilter.skipTools`, `outputFilter.teeSaveOnTruncate`, `outputFilter.customFilters`
 
-NLP-based compression with 3 modes:
+### L2 — Caveman Semantic
 
-| Mode | Backend | When to Use |
-|------|---------|-------------|
-| `nlp` | TF-IDF sentence scoring (no deps) | Fast, on-device, ~1ms |
-| `mlm` | Transformers.js embeddings | Better semantic preservation |
-| `llm` | LLM-based summarization | Highest quality, slowest |
+**File**: `src/layers/layer2-caveman.ts`  
+**Hooks into**: `chat.message`
 
-All modes protect code blocks (``` fences) and error messages from compression.
+NLP-based message compression. Three backends, selectable via `semantic.mode`:
 
-### L3 — DCP (`src/layers/layer3-dcp.ts`, `src/dcp/`)
+| Mode | Backend | Dependencies | Speed | Quality |
+|------|---------|-------------|------|---------|
+| `nlp` | TF-IDF + sentence scoring | None (pure JS) | ~1–5ms | Medium |
+| `mlm` | Transformers.js embeddings | `@huggingface/transformers` (optional) | ~50–200ms | Good |
+| `llm` | LLM-based summarization | Provider model | ~500ms–2s | Best |
 
-Adaptive context compression. Decides WHEN to compress via:
+All modes protect:
+- Code blocks (``` fences) — never compressed
+- Error messages — preserved verbatim
+- URLs and file paths — kept intact
 
-1. **Scorer** (`scorer.ts`): Scores each message by purpose, recency, and role
-2. **Pruner** (`prune.ts`): Selects stale candidates, groups into batches
-3. **Compress State** (`compress-state.ts`): Generates high-fidelity summaries
-4. **Storage** (`storage.ts`): Persists compressed content for expansion via `ultrapress_expand`
+### L3 — DCP (Dynamic Context Placeholder)
 
-Token-aware: auto-compress only when batch ≥ 5 messages to avoid wasting tokens on tiny blocks.
+**File**: `src/layers/layer3-dcp.ts`  
+**Hooks into**: `chat.message`
 
-### L4 — Cleanup (`src/layers/layer4-cleanup.ts`)
+Adaptive conversation compression. Decides **when** to compress based on session state:
 
-Post-filter cleanup: deduplicates consecutive identical tool calls, purges stale error messages after N turns.
+1. **Context Monitor** (`src/dcp/context-monitor.ts`): Tracks token counts per role (user/assistant/tool)
+2. **Scorer** (`src/dcp/scorer.ts`): Scores each message by:
+   - **Purpose**: instructional > diagnostic > summary > context
+   - **Recency**: older = more compressible
+   - **Role**: tool outputs compress more aggressively than user messages
+3. **Pruner** (`src/dcp/prune.ts`): Selects stale messages, groups into batches of configurable size
+4. **Compression** (`src/dcp/compress-state.ts`): Generates high-fidelity summaries preserving factual information
+5. **Storage** (`src/dcp/storage.ts`): Persists original content for expansion via `ultrapress_expand` custom tool
+
+Token-aware: skips auto-compress when batch size < 5 messages (configurable via `summarization.batchThreshold`).
+
+Protected content (from `src/dcp/protected-content.ts`):
+- System prompts
+- Recent messages (`preserveLastN`)
+- Messages with critical keywords (errors, configs, etc.)
+
+### L4 — Cleanup
+
+**File**: `src/layers/layer4-cleanup.ts`  
+**Hooks into**: `tool.execute.after`
+
+Two sub-strategies:
+
+1. **Dedup** (`src/cleanup/dedup.ts`): Detects identical consecutive tool calls (same tool + same output) and collapses to one. Useful when retries produce identical diagnostic output.
+2. **Error Purge** (`src/cleanup/purge-errors.ts`): After N turns (configurable), removes stale error/exception messages that are no longer relevant to the current conversation flow.
 
 ---
 
@@ -121,12 +211,24 @@ All commands are prefixed with `/up`:
 | `/up` | Toggle compression on/off |
 | `/up enable` | Enable compression |
 | `/up disable` | Disable compression |
-| `/up stats` | Show layer-by-layer compression statistics |
-| `/up config [key=value ...]` | View or set config (persisted across sessions) |
-| `/up schema` | Print JSON config schema |
-| `/up notify [off\|minimal\|detailed]` | Set notification level |
+| `/up stats` | Layer-by-layer compression statistics |
+| `/up config` | View current configuration (JSON) |
+| `/up config <key>=<value> [...]` | Set configuration values (persisted across restarts) |
+| `/up schema` | Print full JSON schema for config |
+| `/up notify off` | Disable all compression notifications |
+| `/up notify minimal` | Show only errors and major events (default) |
+| `/up notify detailed` | Show per-layer compression notifications |
 
-### Stats Display Example
+### Config via `/up config`
+
+```
+/up config outputFilter.maxCharsPerOutput=4000
+/up config semantic.mode=llm
+/up config summarization.preserveLastN=6
+/up config notification=detailed
+```
+
+### Stats Output
 
 ```
 UltraPress Session Stats
@@ -158,142 +260,279 @@ real session tokens may vary due to repeated compression by platform
 
 ---
 
-## Configuration
+## Hook Map
 
-Config is persisted in `~/.config/opencode/ultrapress/storage/config.json`.
-
-```json
-{
-  "enabled": true,
-  "enableDebug": false,
-  "outputFilter": {
-    "enabled": true,
-    "maxCharsPerOutput": 6000,
-    "teeSaveOnTruncate": true,
-    "skipTools": ["task"],
-    "customFilters": []
-  },
-  "semantic": {
-    "enabled": true,
-    "mode": "nlp",
-    "model": "",
-    "compressUserMessages": true,
-    "compressAssistantMessages": true,
-    "compressToolOutputs": true,
-    "protectCodeBlocks": true,
-    "protectErrors": true,
-    "skipTools": ["task"]
-  },
-  "summarization": {
-    "enabled": true,
-    "minMessagesForCompression": 10,
-    "batchThreshold": 5,
-    "maxBatchSize": 12,
-    "contextLines": 3,
-    "memoryLimit": 300
-  },
-  "cleanup": {
-    "enabled": true,
-    "deduplication": { "enabled": true },
-    "purgeErrors": { "enabled": true, "turns": 5 }
-  },
-  "commands": { "enabled": true },
-  "notification": "minimal"
-}
-```
-
-Set via `/up config`:
+### Hook Registration Order (`src/index.ts`)
 
 ```
-/up config outputFilter.maxCharsPerOutput=4000
-/up config semantic.mode=llm
-/up config notification=detailed
+1. command.execute.before
+   └─ Handles: /up, /up enable, /up disable, /up stats, /up config, /up schema, /up notify
+   └─ Side effect: Creates ~/.config/opencode/ultrapress/storage/config.json on first /up
+   └─ Side effect: Notifies if npm has a newer version available
+
+2. tool.execute.after
+   └─ Runs L1 (output filter) on every tool execution
+   └─ Runs L4 cleanup (dedup identical tool calls, purge stale errors)
+   └─ Tracks: totalTokensRaw += rawTokens, totalTokensCompressed += compressedTokens (for L1/L4)
+   └─ Skips tools listed in outputFilter.skipTools (default: ["task"])
+
+3. chat.message { role: any }
+   └─ Token sync: captures sent/received statistics
+   └─ L2 (semantic): compresses user/assistant/messages when configured
+   └─ L3 (DCP): checks if context needs compaction, runs scorer + pruner + compress
+   └─ Post-command suppression: prevents model from following up on /up commands
+
+4. experimental.chat.messages.transform
+   └─ Strips [analyze-mode] and [search-mode] injection patterns from messages
+   └─ Important: avoid message structure mutations — prior attempts caused "failed send command"
+
+5. experimental.session.compacting
+   └─ Injects protected context (recent messages, critical instructions) during platform compaction
+   └─ Appends session stats summary (original + compressed tokens) to protected context
 ```
 
-Full schema: `ultrapress.schema.json`
+### Custom Tools
+
+| Tool | Description |
+|------|-------------|
+| `ultrapress_compress` | Manually compress a range or specific messages (mode: range/message) |
+| `ultrapress_expand` | Expand a previously compressed block by block_id or topic |
 
 ---
 
-## Development History (Changelog)
+## Configuration Reference
 
-| Version | Date | Changes |
-|---------|------|---------|
-| 0.2.14 | May 28, 2026 | Rewrote README, stats display fix (remove hardcoded `−`), fix L3 stats corrupting totalTokensCompressed |
-| 0.2.13 | May 28, 2026 | L3 token-aware threshold (skip batch < 5), externalize @huggingface/transformers, auto-check npm for newer version |
-| 0.2.11 | May 28, 2026 | Separate plugin config to `ultrapress.plugin.json`, auto-migration from old `ultrapress.json` |
-| 0.2.10 | May 28, 2026 | Transformers optional (optionalDependencies), auto-install fallback, config migration on upgrade |
-| 0.2.9 | May 27, 2026 | Fix scoreThreshold default mismatch (synced code to 0.45) |
-| 0.2.8 | May 27, 2026 | Multi-session stats, subagent usage tracking, npm publish CI |
-| 0.2.7 | May 26, 2026 | Broaden `/up` follow-up suppression, strip AI-slop pattern injections |
-| 0.2.6 | May 25, 2026 | `enableDebug` toggle, MLM/LLM logger routing, `/up` handler stabilization |
-| 0.2.5 | May 23, 2026 | No functional changes — version bumped to align npm with git |
-| 0.2.4 | May 23, 2026 | Balanced defaults (preserveLastN: 4, scoreThreshold: 0.45), critical context protection, ONNX thread fix, config validation hardening |
-| 0.2.3 | May 22, 2026 | Schema guard, ONNX dispose fix, migration fix |
-| 0.2.2 | May 21, 2026 | Session resume fix, DCP tool integration, init script fix |
-| 0.2.1 | May 20, 2026 | Command fix, system prompt injection, session stats tracking |
-| 0.2.0 | May 19, 2026 | SemVer reset, L4 cleanup, config refactor, public README |
-| 0.1.0 | Mar 2026 | Initial: 4-layer pipeline, L1/L2/L3 core, DCP scorer/pruner, /up commands, private alpha |
+Config is stored in `~/.config/opencode/ultrapress/storage/config.json`. Full JSON schema: `ultrapress.schema.json`.
+
+### Root Options
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `enabled` | boolean | `true` | Master toggle for all compression |
+| `enableDebug` | boolean | `false` | Enable verbose debug logging to console |
+| `notification` | string | `"minimal"` | Notification level: `off`, `minimal`, `detailed` |
+
+### `outputFilter` (L1)
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `enabled` | boolean | `true` | Enable L1 filtering |
+| `maxCharsPerOutput` | number | `6000` | Max chars before truncation |
+| `teeSaveOnTruncate` | boolean | `true` | Save full output to temp file when truncated |
+| `skipTools` | string[] | `["task"]` | Tool names to skip filtering |
+| `customFilters` | array | `[]` | Custom regex filters: `{ name, pattern, strip?: bool, keep?: bool, maxLines?: number }` |
+
+### `semantic` (L2)
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `enabled` | boolean | `true` | Enable L2 semantic compression |
+| `mode` | string | `"nlp"` | Backend: `nlp`, `mlm`, or `llm` |
+| `model` | string | `""` | Model name for MLM/LLM modes |
+| `compressUserMessages` | boolean | `true` | Compress user messages |
+| `compressAssistantMessages` | boolean | `true` | Compress assistant messages |
+| `compressToolOutputs` | boolean | `true` | Compress tool output messages |
+| `protectCodeBlocks` | boolean | `true` | Preserve code blocks verbatim |
+| `protectErrors` | boolean | `true` | Preserve error messages verbatim |
+| `skipTools` | string[] | `["task"]` | Tool outputs to skip |
+
+### `summarization` (L3 / DCP)
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `enabled` | boolean | `true` | Enable L3 DCP compression |
+| `preserveLastN` | number | `4` | Preserve last N messages from compression |
+| `scoreThreshold` | number | `0.45` | Score threshold (0–1). Higher = fewer messages compressed |
+| `batchThreshold` | number | `5` | Min messages before auto-compress kicks in |
+| `maxBatchSize` | number | `12` | Max messages per compression batch |
+| `contextLines` | number | `3` | Context lines preserved around compressed spans |
+| `memoryLimit` | number | `300` | Max stored compressed blocks |
+
+### `cleanup` (L4)
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `enabled` | boolean | `true` | Enable L4 cleanup |
+| `deduplication.enabled` | boolean | `true` | Dedup identical consecutive tool calls |
+| `purgeErrors.enabled` | boolean | `true` | Purge stale error messages |
+| `purgeErrors.turns` | number | `5` | Turns before stale errors get purged |
+
+### Config Validation Rules
+
+Applied in `src/config/validate.ts`:
+
+- `maxCharsPerOutput`: clamped to [500, 100000]
+- `preserveLastN`: integer, min 0
+- `scoreThreshold`: float, clamped to [0, 1]
+- `batchThreshold`: integer, min 1
+- `maxBatchSize`: integer, min `batchThreshold + 1`
+- All `enabled` keys: coerced to boolean
+- Unknown keys: stripped with warning
+- Missing keys: filled from defaults
 
 ---
 
-## File Map
+## Development
+
+### Source Map
 
 ```
 src/
-├── index.ts                        # Plugin entry, hook registration
+├── index.ts                        # Plugin entry, hook registration (single exports default)
 ├── commands/
-│   └── slash.ts                    # /up command handler + stats display
+│   └── slash.ts                    # /up command handler, buildStatsResponse, config setter
 ├── config/
-│   ├── defaults.ts                 # Default configuration values
-│   ├── schema.ts                   # TypeScript types & runtime schema
-│   └── validate.ts                 # Config sanitization & validation
+│   ├── defaults.ts                 # Default config values
+│   ├── schema.ts                   # TypeScript interfaces (UltraConfig, each layer config)
+│   └── validate.ts                 # Config sanitization, clamping, fallback
 ├── layers/
-│   ├── layer1-output-filter.ts     # L1: Tool output filtering
-│   ├── layer2-caveman.ts           # L2: Semantic compression
-│   ├── layer3-dcp.ts               # L3: DCP conversation compression
-│   └── layer4-cleanup.ts           # L4: Dedup & error purge
-├── caveman/
-│   ├── nlp.ts                      # TF-IDF sentence scoring
-│   ├── mlm.ts                      # Transformers.js embeddings
-│   ├── llm.ts                      # LLM-based summarization
-│   ├── rules.ts                    # Compression rules & heuristics
-│   └── facts.ts                    # Fact extraction utilities
-├── dcp/
-│   ├── scorer.ts                   # Message importance scoring
-│   ├── prune.ts                    # Stale message selection
-│   ├── compress-state.ts           # Summary generation logic
-│   ├── compress-tool.ts            # ultrapress_compress tool
-│   ├── expand-tool.ts              # ultrapress_expand tool
-│   ├── storage.ts                  # Compressed content persistence
-│   ├── context-monitor.ts          # Context size monitoring
-│   └── protected-content.ts        # Content protection during compression
+│   ├── layer1-output-filter.ts     # L1: command-type-aware output truncation + filtering
+│   ├── layer2-caveman.ts           # L2: NLP-based semantic message compression
+│   ├── layer3-dcp.ts               # L3: DCP conversation span compression
+│   └── layer4-cleanup.ts           # L4: tool call dedup + error purge
 ├── cleanup/
-│   ├── dedup.ts                    # Consecutive identical tool call dedup
-│   └── purge-errors.ts             # Stale error message purging
+│   ├── dedup.ts                    # Consecutive identical tool call deduplication
+│   └── purge-errors.ts             # Stale error/exception message purging
+├── caveman/
+│   ├── nlp.ts                      # TF-IDF sentence scoring for compression
+│   ├── mlm.ts                      # Transformers.js embedding-based compression
+│   ├── llm.ts                      # LLM-based summarization via provider model
+│   ├── rules.ts                    # Compression rules & heuristics
+│   └── facts.ts                    # Fact extraction and preservation
+├── dcp/
+│   ├── scorer.ts                   # Message importance scoring (purpose, recency, role)
+│   ├── prune.ts                    # Stale message selection and batch grouping
+│   ├── compress-state.ts           # Summary generation from message batches
+│   ├── compress-tool.ts            # ultrapress_compress custom tool handler
+│   ├── expand-tool.ts              # ultrapress_expand custom tool handler
+│   ├── storage.ts                  # Compressed block persistence
+│   ├── context-monitor.ts          # Session token count tracking
+│   └── protected-content.ts        # Content preservation rules during compression
 ├── filters/
-│   ├── bash.ts                     # Shell command output filters
-│   ├── git.ts                      # Git command output filters
-│   ├── fs.ts                       # Filesystem command filters
-│   ├── test.ts                     # Test runner output filters
-│   └── generic.ts                  # Universal smart filter
-└── utils/
-    ├── logger.ts                   # Debug logging
-    └── token-count.ts              # Token counting (tiktoken-like)
+│   ├── bash.ts                     # Shell command output filter
+│   ├── git.ts                      # Git command output filter
+│   ├── fs.ts                       # Filesystem command output filter
+│   ├── test.ts                     # Test runner output filter (jest/vitest/pytest/cargo/bun)
+│   └── generic.ts                  # Universal smart truncation filter
+├── utils/
+│   ├── logger.ts                   # Namespaced debug logging
+│   └── token-count.ts              # Token counting (tiktoken-like heuristic)
+└── tests/                          # (see tests/ directory at repo root)
+
+tests/
+├── layer3-dcp.test.ts              # L3 scorer, pruner, compress-unit tests
+└── regression.test.ts              # End-to-end regression tests
+```
+
+### Quick Commands
+
+```bash
+npm install          # Install dependencies (uses npm lockfile)
+npm run lint         # TypeScript typecheck (tsc --noEmit)
+npm test             # Run unit tests (bun test)
+npm run build        # Build dist/ — ESM + .d.ts declarations (tsup)
+npm run benchmark    # Run layer-by-layer performance benchmarks (tsx benchmarks/run.ts)
+```
+
+**Verification order**: `npm run lint` → `npm test` → `npm run build`
+
+### Adding a Config Key
+
+To add a new configuration parameter, update **all 4** of:
+
+1. `src/config/schema.ts` — TypeScript interface
+2. `src/config/defaults.ts` — Default value
+3. `ultrapress.schema.json` — JSON Schema definition
+4. `docs/konfigurasi-lengkap.md` — Full documentation (Indonesian)
+
+### CI/CD
+
+| Workflow | File | Trigger | Actions |
+|----------|------|---------|---------|
+| CI | `.github/workflows/ci.yml` | PR / push to main | `lint` → `test` → `build` |
+| Publish | `.github/workflows/publish.yml` | Tag `v*` | CI gates → `npm publish` → GitHub Release |
+
+The publish workflow syncs version from the git tag (strip leading `v`). Do not manually `npm publish` — let CI handle it.
+
+### Test / Benchmark Quirks
+
+- Unit tests run with **Bun** — Node-only checks may miss failures
+- `benchmarks/run.ts` is fixture-driven and measures each layer independently (not chained pipeline)
+- `npm run lint` is `tsc --noEmit` — strict TypeScript checking
+
+---
+
+## Troubleshooting
+
+### Plugin Not Loading
+
+```
+# Verify plugin is registered:
+opencode config get plugin
+
+# Verify plugin directory exists (local installs):
+ls ~/.config/opencode/plugins/
+
+# Check for build errors:
+cd /path/to/opencode-ultrapress
+npm run build
+```
+
+### `/up` Commands Not Working
+
+- Ensure the plugin is registered in `opencode.json`'s `"plugin"` array
+- Restart OpenCode after adding/removing a plugin
+- If seeing "failed send command", ensure you're not mutating message structure in hook handlers
+
+### Stats Show Negative Savings
+
+- This was a display bug in versions <0.2.14 where `−` was hardcoded in the percentage display
+- Also fixed: L3 stats no longer corrupt `totalTokensCompressed` (previously decremented to 0)
+- Update to latest version and restart OpenCode
+
+### L3 Not Compressing
+
+- Check `summarization.enabled` is true
+- Check `summarization.batchThreshold` — auto-compress only runs when pending messages ≥ threshold (default 5)
+- Protected messages (`preserveLastN`) are never compressed
+- Use `ultrapress_compress` manually to force compression
+
+### L2 MLM/LLM Mode Not Working
+
+- MLM requires `@huggingface/transformers` in node_modules (optional dependency)
+- LLM requires an active provider model in OpenCode
+- Fall back to `nlp` mode if dependencies are missing
+
+### Cache / Stale Plugin
+
+After upgrading, if OpenCode doesn't pick up changes:
+```bash
+# Reinstall plugin
+opencode plugin remove @tarquinen/opencode-dcp
+opencode plugin @tarquinen/opencode-dcp@latest --global
 ```
 
 ---
 
-## Project Files
+## Change History
 
-| File | Purpose |
-|------|---------|
-| `package.json` | ESM package, `main`/`types` point to `dist/` |
-| `tsconfig.json` | Strict TypeScript config |
-| `tsup.config.ts` | Build config (ESM + d.ts) |
-| `ultrapress.schema.json` | Full JSON schema for config |
-| `AGENTS.md` | Agent context for AI-assisted development |
-| `CHANGELOG.md` | Version history |
-| `.github/workflows/ci.yml` | CI: lint → build → test |
-| `.github/workflows/publish.yml` | npm publish (CI-gated + manual dispatch) |
-| `benchmarks/run.ts` | Layer-by-layer performance benchmarks |
-| `docs/konfigurasi-lengkap.md` | Full config documentation |
+| Version | Date | Summary |
+|---------|------|---------|
+| **0.2.14** | 2026-05-28 | New comprehensive README. Fixed: stats display `−` → `+`, L3 no longer corrupts `totalTokensCompressed`, added `scoreThreshold` to `SummarizationConfig` type + validation. |
+| **0.2.13** | 2026-05-28 | L3 token-aware threshold (skip auto-compress when batch < 5). Externalize `@huggingface/transformers` from bundle for ONNX runtime resolution. Auto-check npm for newer version. |
+| **0.2.12** | 2026-05-28 | Separate plugin config to `ultrapress.plugin.json`, auto-migration from legacy `ultrapress.json`. |
+| **0.2.11** | 2026-05-28 | Fix `ultrapress.json` → plugin config separation, config migration path. |
+| **0.2.10** | 2026-05-28 | Transformers optional dependency, auto-install fallback, config migration on upgrade. |
+| **0.2.9** | 2026-05-27 | Fix `scoreThreshold` default mismatch (synced code to 0.45). |
+| **0.2.8** | 2026-05-27 | Multi-session stats tracking, subagent usage reporting, npm publish CI pipeline. |
+| **0.2.7** | 2026-05-26 | Broaden `/up` follow-up suppression, strip `[analyze-mode]`/`[search-mode]` injection patterns. |
+| **0.2.6** | 2026-05-25 | `enableDebug` toggle, MLM/LLM import error handling, `/up` handler stabilization. |
+| **0.2.5** | 2026-05-23 | Version bump to align npm with git (no functional changes). |
+| **0.2.4** | 2026-05-23 | Balanced defaults (`preserveLastN: 4`, `scoreThreshold: 0.45`), critical context protection, ONNX thread fix, config validation hardening. |
+| **0.2.3** | 2026-05-22 | Schema guard (block config with undeclared keys), ONNX dispose fix, migration fix. |
+| **0.2.2** | 2026-05-21 | Session resume fix, DCP tool integration (`ultrapress_compress`/`expand`), init script fix. |
+| **0.2.1** | 2026-05-20 | Command fix (slash command handler refactor), system prompt injection, session stats tracking. |
+| **0.2.0** | 2026-05-19 | SemVer reset. L4 cleanup layer, config refactor (layered schema), public README. |
+| **0.1.x** | 2026-03–05 | Initial development: 4-layer pipeline, L1/L2/L3 core, DCP scorer/pruner, `/up` commands, private alpha. |
+
+Full commit history: [GitHub](https://github.com/rahadiana/opencode-ultrapress)
