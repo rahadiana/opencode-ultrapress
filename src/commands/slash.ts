@@ -89,7 +89,7 @@ L4 Cleanup : ✅ ON`
 ───────────────────────────────────
 Total Original   : ${formatTokens(totalTokensRaw)}
 Total Compressed : ${formatTokens(totalTokensCompressed)}
-Overall Savings  : ${formatTokens(totalSaved)} (${overallPct >= 0 ? '+' : ''}${overallPct}%)${realTokensLine}
+Overall Savings  : ${formatTokens(totalSaved)} (${overallPct > 0 ? '−' : overallPct < 0 ? '+' : ''}${overallPct}%)${realTokensLine}
 
 Breakdown by layer:
   L1 Filter  : saved ${formatTokens(savedByLayer.outputFilter)}

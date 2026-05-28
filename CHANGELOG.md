@@ -5,7 +5,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [0.2.15] — 2026-05-28
+## [0.2.16] — 2026-05-28
 
 ### Changed
 - Rewrote README: proper title reflecting DCP+Caveman+RTK combination, embedded banner SVG, architecture diagram, correct install command (`opencode plugin @tarquinen/opencode-dcp@latest --global`), references to `docs/architecture.md` and `docs/konfigurasi-lengkap.md`
