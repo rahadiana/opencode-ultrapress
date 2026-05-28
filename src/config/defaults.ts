@@ -30,15 +30,7 @@ export const DEFAULT_CONFIG: UltraPressConfig = {
   // Layer 3 - Smart Summarization
   summarization: {
     enabled: true,
-    mode: "range",
-    maxContextLimit: 60_000,
-    minContextLimit: 35_000,
-    nudgeFrequency: 4,
-    nudgeThreshold: 0.70, // nudge at 70% of maxContextLimit
-    summaryBuffer: true,
-    showCompression: true,
     preserveLastN: 4,
-    scoreThreshold: 0.45,
   },
 
   // Layer 4 - Auto Cleanup

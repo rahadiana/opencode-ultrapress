@@ -73,18 +73,19 @@
     },
     "summarization": {
       "type": "object",
-      "description": "Layer 3 — Dynamic Context Pruning.",
+      "default": {},
       "properties": {
-        "enabled": { "type": "boolean", "default": true },
-        "mode": { "type": "string", "enum": ["range", "message"], "default": "range" },
-        "maxContextLimit": { "type": "number", "default": 60000 },
-        "minContextLimit": { "type": "number", "default": 35000 },
-        "nudgeFrequency": { "type": "number", "default": 4 },
-        "nudgeThreshold": { "type": "number", "default": 0.70, "minimum": 0, "maximum": 1, "description": "Nudge when context reaches this fraction of maxContextLimit (0-1)." },
-        "summaryBuffer": { "type": "boolean", "default": true },
-        "showCompression": { "type": "boolean", "default": true },
-        "preserveLastN": { "type": "number", "default": 4, "description": "Protect the most recent N messages from pruning. Marker-protected messages are preserved regardless of recency." },
-        "scoreThreshold": { "type": "number", "default": 0.45, "description": "0-1. 0=off, 0.45=recommended. High-score messages are preserved even inside old blocks." }
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Layer 3 placeholder compression"
+        },
+        "preserveLastN": {
+          "type": "integer",
+          "default": 4,
+          "minimum": 0,
+          "description": "Preserve last N messages from placeholder compression (0 = compress all)"
+        }
       }
     },
     "commands": {

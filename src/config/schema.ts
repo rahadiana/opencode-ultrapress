@@ -48,26 +48,10 @@ export interface SemanticConfig {
 }
 
 export interface SummarizationConfig {
-  /** Enable Layer 3 smart summarization */
+  /** Enable Layer 3 placeholder compression */
   enabled: boolean
-  /** Summarization mode */
-  mode: "range" | "message"
-  /** Token limit to trigger compression nudge */
-  maxContextLimit: number
-  /** Target token count after compression */
-  minContextLimit: number
-  /** How often to check context size (every N turns) */
-  nudgeFrequency: number
-  /** Nudge when context reaches this fraction of maxContextLimit (0-1, default: 0.70 = 70%) */
-  nudgeThreshold: number
-  /** Buffer summaries for batch processing */
-  summaryBuffer: boolean
-  /** Show compression info in output */
-  showCompression: boolean
-  /** Preserve last N messages from pruning to keep recent context intact (0 = disable recency protection) */
+  /** Preserve last N messages from placeholder compression (0 = compress all) */
   preserveLastN: number
-  /** Multi-signal importance scoring threshold (0-1). 0 = disabled, 0.45 = recommended. */
-  scoreThreshold: number
 }
 
 export interface CleanupConfig {

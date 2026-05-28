@@ -94,18 +94,9 @@ function sanitizeSemantic(value: unknown, fallback: SemanticConfig): SemanticCon
 
 function sanitizeSummarization(value: unknown, fallback: SummarizationConfig): SummarizationConfig {
   const input = isRecord(value) ? value : {}
-  const mode = input.mode === "range" || input.mode === "message" ? input.mode : fallback.mode
   return {
     enabled: asBoolean(input.enabled, fallback.enabled),
-    mode,
-    maxContextLimit: asNumber(input.maxContextLimit, fallback.maxContextLimit, { min: 1 }),
-    minContextLimit: asNumber(input.minContextLimit, fallback.minContextLimit, { min: 0 }),
-    nudgeFrequency: Math.floor(asNumber(input.nudgeFrequency, fallback.nudgeFrequency, { min: 1 })),
-    nudgeThreshold: asNumber(input.nudgeThreshold, fallback.nudgeThreshold, { min: 0, max: 1 }),
-    summaryBuffer: asBoolean(input.summaryBuffer, fallback.summaryBuffer),
-    showCompression: asBoolean(input.showCompression, fallback.showCompression),
     preserveLastN: Math.floor(asNumber(input.preserveLastN, fallback.preserveLastN, { min: 0 })),
-    scoreThreshold: asNumber(input.scoreThreshold, fallback.scoreThreshold, { min: 0, max: 1 }),
   }
 }
 
