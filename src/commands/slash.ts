@@ -89,7 +89,7 @@ L4 Cleanup : ✅ ON`
 ───────────────────────────────────
 Total Original   : ${formatTokens(totalTokensRaw)}
 Total Compressed : ${formatTokens(totalTokensCompressed)}
-Overall Savings  : ${formatTokens(totalSaved)} (−${overallPct}%)${realTokensLine}
+Overall Savings  : ${formatTokens(totalSaved)} (${overallPct >= 0 ? '+' : ''}${overallPct}%)${realTokensLine}
 
 Breakdown by layer:
   L1 Filter  : saved ${formatTokens(savedByLayer.outputFilter)}
@@ -113,9 +113,7 @@ function buildContextResponse(stats: SessionStats, config: UltraPressConfig): st
       : ""
    return `📐 UltraPress Context Info
 ───────────────────────────────────
-Context Limit  : ${config.summarization.maxContextLimit.toLocaleString()} tokens
-Target After   : ${config.summarization.minContextLimit.toLocaleString()} tokens
-Nudge Every    : ${config.summarization.nudgeFrequency} turns
+Preserve Last N : ${config.summarization.preserveLastN} messages
 Session Uptime : ${minutes}m ${seconds}s${realLine}`
 }
 
@@ -129,7 +127,7 @@ function buildCompressResponse(stats: SessionStats, config: UltraPressConfig): s
    const statusLines = [
       `✅ L1 Output Filter : ${config.outputFilter.enabled ? "active" : "disabled"}`,
       `✅ L2 Semantic (${config.semantic.mode.toUpperCase()}) : ${config.semantic.enabled ? "active" : "disabled"}`,
-      `✅ L3 DCP Summarization : active (nudges every ${config.summarization.nudgeFrequency} turns when context > ${(config.summarization.maxContextLimit / 1000).toFixed(0)}k tokens)`,
+       `✅ L3 Placeholder Compression : active (preserveLastN=${config.summarization.preserveLastN})`,
       `✅ L4 Auto Cleanup : active`,
    ].join("\n")
 
