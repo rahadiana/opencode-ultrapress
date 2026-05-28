@@ -8,9 +8,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [0.2.15] — 2026-05-28
 
 ### Changed
-- Rewrote README with comprehensive architecture docs, file map, changelog
-- Stats display: fix hardcoded `−` sign showing negative savings
-- L3 stats accounting: remove `totalTokensCompressed` corruption — L3 savings tracked in `savedByLayer.summarization` only, overall savings reflect L1/L2/L4 + L3 correctly
+- Rewrote README: proper title reflecting DCP+Caveman+RTK combination, embedded banner SVG, architecture diagram, correct install command (`opencode plugin @tarquinen/opencode-dcp@latest --global`), references to `docs/architecture.md` and `docs/konfigurasi-lengkap.md`
+
+### Fixed
+- Stats display: hardcoded `−` sign showing `(−100%)` → proper `(+100%)` sign
+- L3 stats accounting: `totalTokensCompressed` no longer corrupted by L3 savings (previously decremented to 0)
+- Added `scoreThreshold` to `SummarizationConfig` type, defaults, and validation
+- Removed unused `SessionStats` import from `layer3-dcp.ts`
+- Updated `docs/architecture.md`: renamed GSC → Caveman, L3 nudge → DCP, updated hook order and file map
+- Updated `docs/konfigurasi-lengkap.md`: added `scoreThreshold` to config table, code example, and interface definition
 
 ## [0.2.13] — 2026-05-28
 
