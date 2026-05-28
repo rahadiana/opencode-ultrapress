@@ -165,39 +165,29 @@ The most powerful layer. **Removes old messages from the context window** and re
 
 | Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `summarization.enabled` | `boolean` | `true` | Enable Layer 3. |
-| `summarization.mode` | `"range"` / `"message"` | `"range"` | Pruning mode: `range` (sequential message block) or `message` (one/several specific IDs). |
-| `summarization.maxContextLimit` | `number` | `60000` | Hard limit before compression nudge. |
-| `summarization.minContextLimit` | `number` | `35000` | Token target after pruning. |
-| `summarization.nudgeFrequency` | `number` | `4` | Show nudge every N turns. |
-| `summarization.nudgeThreshold` | `number` | `0.70` | Nudge when context reaches this fraction of maxContextLimit (0-1). |
-| `summarization.summaryBuffer` | `boolean` | `true` | Buffer summaries for batch processing. |
-| `summarization.showCompression` | `boolean` | `true` | Show compression notifications in output. |
-| `summarization.preserveLastN` | `number` | `4` | Do not prune the **last** N messages (0 = disable). Protects current conversation context. |
-| `summarization.scoreThreshold` | `number` | `0.45` | Multi-signal importance scoring (0-1). `0` = disable. `0.45` = recommended. Messages with score above threshold are preserved even if in the old block. |
+| `summarization.enabled` | `boolean` | `true` | Enable Layer 3 placeholder compression. |
+| `summarization.preserveLastN` | `number` | `4` | Preserve last N messages from placeholder compression (0 = compress all). Protects recent conversation context. |
 
 ### Workflow
 
 ```
-1. Context Monitor → detect token > 70% maxContextLimit (pre-emptive)
-2. Nudge → insert warning into user prompt (every nudgeFrequency turn)
-3. LLM calls → ultrapress_compress(mode="range", from="msg_X", to="msg_Y")
-4. Compression Block → stored in memory (not yet executed)
-5. Next chat → block executed: remove msg_X through msg_Y, insert summary
-6. Original content → stored in plugin memory (not LLM context)
-7. LLM can call → ultrapress_expand(block_id=0) to view original content
+1. messages.transform hook fires before each LLM request
+2. L3 iterates output.messages, preserving last N (preserveLastN)
+3. For each older message: replace part.text with placeholder
+4. Tool output → replaced with "[Old tool result content cleared]"
+5. Messages stay in array — only content is replaced. Structure preserved.
+6. Zero LLM cost — no nudge, no tool calls, no LLM cycles wasted.
 ```
 
-### Multi-Signal Importance Scoring
+> L3 placeholder compression is fully automatic. It runs silently before every LLM request. No user or LLM action needed. For manual compression, use `/up compress` or the `ultrapress_compress` tool.
 
-In addition to `preserveLastN`, each message is scored from 5 signals:
-- **Recency** (30%) — newer messages get higher scores (exponential decay)
-- **Role** (25%) — user > system > assistant > tool
-- **Tool type** (20%) — `write`/`edit`/`bash` > `read`/`grep` > `todowrite`
-- **Keywords** (15%) — task words (`implement`, `fix`, `urgent`) score high
-- **Content size** (10%) — 50-500 chars ideal, very short/long score low
+### Preservation Control
 
-Activate with `scoreThreshold: 0.45`. Messages with score ≥ threshold are preserved even if old.
+| Feature | Description |
+| :--- | :--- |
+| **`preserveLastN`** | Keep the **last** N messages untouched. Recent conversation context preserved verbatim. Default: `4`. Set to `0` to compress all. |
+
+> 💡 **Best Practice**: Start with default `preserveLastN: 4`. If you frequently refer to content older than 4 messages, increase to `6` or `8`. The placeholder compression is backward compatible with L2 auto-summarize — old messages are first compressed semantically by L2, then content is replaced by L3.
 
 ### Reversible Compression
 
@@ -243,10 +233,7 @@ In addition to tool protection, messages containing critical markers are preserv
 ```jsonc
 {
   "summarization": {
-    "maxContextLimit": 50000,     // more aggressive — prune at 50k
-    "minContextLimit": 30000,     // nudge starts at 30k
-    "nudgeFrequency": 3,          // nudge more often
-    "preserveLastN": 4
+    "preserveLastN": 4                // aggressive — compress all old messages
   }
 }
 ```
@@ -254,10 +241,7 @@ In addition to tool protection, messages containing critical markers are preserv
 ```jsonc
 {
   "summarization": {
-    "maxContextLimit": 100000,    // conservative — allow large context
-    "minContextLimit": 60000,
-    "nudgeFrequency": 8,          // nudge rarely
-    "preserveLastN": 6
+    "preserveLastN": 6                // conservative — keep more recent context
   }
 }
 ```
@@ -364,7 +348,6 @@ You can also override configuration via environment variables (highest priority)
 | `ULTRAPRESS_SEMANTIC_MODE` | `semantic.mode` | `"nlp"` |
 | `ULTRAPRESS_SEMANTIC_MODEL` | `semantic.model` | `"Xenova/all-MiniLM-L6-v2"` |
 | `ULTRAPRESS_SUMMARIZATION_ENABLED` | `summarization.enabled` | `"true"` |
-| `ULTRAPRESS_MAX_CONTEXT` | `summarization.maxContextLimit` | `"50000"` |
 | `ULTRAPRESS_PRESERVE_LAST_N` | `summarization.preserveLastN` | `"5"` |
 | `ULTRAPRESS_PURGE_ERRORS` | `cleanup.purgeErrors.enabled` | `"true"` |
 | `ULTRAPRESS_PURGE_TURNS` | `cleanup.purgeErrors.turns` | `"3"` |
@@ -425,18 +408,10 @@ Recommended for most users. Good token savings with strong context safety.
     "minLengthChars": 250
   },
 
-  "summarization": {
-    "enabled": true,
-    "mode": "range",
-    "maxContextLimit": 60000,
-    "minContextLimit": 35000,
-    "nudgeFrequency": 4,
-    "nudgeThreshold": 0.70,
-    "summaryBuffer": true,
-    "showCompression": true,
-    "preserveLastN": 4,
-    "scoreThreshold": 0.45
-  },
+    "summarization": {
+      "enabled": true,
+      "preserveLastN": 4
+    },
 
   "cleanup": {
     "deduplication": { "enabled": true },
@@ -478,14 +453,7 @@ For very long sessions (200+ messages), long CLI output.
 
   "summarization": {
     "enabled": true,
-    "mode": "range",
-    "maxContextLimit": 40000,
-    "minContextLimit": 20000,
-    "nudgeFrequency": 3,
-    "summaryBuffer": false,
-    "showCompression": true,
-    "preserveLastN": 3,
-    "scoreThreshold": 0.40
+    "preserveLastN": 4
   },
 
   "cleanup": {
@@ -527,14 +495,7 @@ For short, focused sessions. Maximum protection for important messages.
 
   "summarization": {
     "enabled": true,
-    "mode": "range",
-    "maxContextLimit": 90000,
-    "minContextLimit": 60000,
-    "nudgeFrequency": 8,
-    "summaryBuffer": false,
-    "showCompression": true,
-    "preserveLastN": 6,
-    "scoreThreshold": 0
+    "preserveLastN": 6
   },
 
   "cleanup": {
@@ -576,15 +537,7 @@ No ML models. No downloads. Works offline.
 
   "summarization": {
     "enabled": true,
-    "mode": "range",
-    "maxContextLimit": 60000,
-    "minContextLimit": 35000,
-    "nudgeFrequency": 5,
-    "nudgeThreshold": 0.70,
-    "summaryBuffer": true,
-    "showCompression": true,
-    "preserveLastN": 4,
-    "scoreThreshold": 0.45
+    "preserveLastN": 4
   },
 
   "cleanup": {
@@ -640,14 +593,7 @@ interface SemanticConfig {
 
 interface SummarizationConfig {
   enabled: boolean
-  mode: "range" | "message"
-  maxContextLimit: number
-  minContextLimit: number
-  nudgeFrequency: number
-  summaryBuffer: boolean
-  showCompression: boolean
   preserveLastN: number
-  scoreThreshold: number
 }
 
 interface CleanupConfig {
@@ -671,4 +617,4 @@ interface CleanupConfig {
 
 ---
 
-> 💡 **Best Practice**: Start with defaults, then adjust based on usage patterns. For long sessions (>100 messages), lower `maxContextLimit` and increase `preserveLastN`.
+> 💡 **Best Practice**: Defaults work well for most users. For long sessions, increase `preserveLastN` to keep more recent context intact. L3 placeholder compression runs automatically — no manual tuning needed for token thresholds.

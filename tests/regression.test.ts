@@ -6,7 +6,8 @@ import { compressNLP } from "../src/caveman/nlp"
 import { compressMLM } from "../src/caveman/mlm"
 import { compressLLM } from "../src/caveman/llm"
 import { extractCodeBlocks, restoreCodeBlocks, verifyPlaceholders } from "../src/caveman/facts"
-import { applyPruning } from "../src/dcp/prune"
+import { applyPlaceholderCompression, restoreMessageContent } from "../src/dcp/prune"
+import { createSessionStorage, type SessionStorage } from "../src/dcp/storage"
 import { createBlock, getAllBlocks, resetCompressionState } from "../src/dcp/compress-state"
 import type { SessionStats } from "../src/config/schema"
 import { readFileSync, unlinkSync, existsSync, rmdirSync } from "fs"
@@ -51,9 +52,10 @@ describe("Config Validation", () => {
     expect(result.semantic.mode).toBe("nlp")
   })
 
-  test("sanitizeConfig: rejects invalid summarization mode", () => {
-    const result = sanitizeConfig({ summarization: { mode: "invalid" } })
-    expect(result.summarization.mode).toBe("range")
+  test("sanitizeConfig: rejects invalid summarization config", () => {
+    const result = sanitizeConfig({ summarization: { enabled: false } })
+    expect(result.summarization.enabled).toBe(false)
+    expect(result.summarization.preserveLastN).toBe(4)
   })
 
   test("sanitizeConfig: accepts valid nlp/mlm/llm modes", () => {
@@ -62,10 +64,9 @@ describe("Config Validation", () => {
     expect(sanitizeConfig({ semantic: { mode: "llm" } }).semantic.mode).toBe("llm")
   })
 
-  test("sanitizeConfig: clamps invalid numbers", () => {
-    const result = sanitizeConfig({ summarization: { nudgeThreshold: 5, maxContextLimit: -100 } })
-    expect(result.summarization.nudgeThreshold).toBe(1) // clamped to 1 max
-    expect(result.summarization.maxContextLimit).toBe(1) // clamped to min 1
+  test("sanitizeConfig: clamps preserveLastN to minimum 0", () => {
+    const result = sanitizeConfig({ summarization: { preserveLastN: -5 } })
+    expect(result.summarization.preserveLastN).toBe(0)
   })
 
   test("sanitizeConfig: preserves skipTools arrays", () => {
@@ -238,97 +239,157 @@ describe("Code Block Placeholder Safety", () => {
 })
 
 // ═══════════════════════════════════════════════════════════════════════════
-// DCP Pruning
+// DCP Placeholder Compression (Position-based)
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe("DCP Pruning", () => {
+describe("DCP Placeholder Compression", () => {
+  let storage: SessionStorage
+
   beforeEach(() => {
     resetCompressionState()
+    storage = createSessionStorage("test-session")
   })
 
-  function makeMsg(id: string, role: string): { id: string; role: string; parts?: any[]; content?: string } {
-    return { id, role, parts: [], content: `content of ${id}` }
+  function makeMsg(id: string, role: string, content?: string): any {
+    return {
+      id,
+      info: { id, role },
+      parts: [],
+      content: content ?? `content of ${id}`,
+    }
   }
 
-  test("applyPruning: does nothing when no blocks exist", () => {
+  function makeToolMsg(id: string, toolOutput: string): any {
+    return {
+      id,
+      info: { id, role: "assistant" },
+      parts: [{ type: "tool", state: { status: "completed" }, output: toolOutput }],
+      content: `tool result: ${toolOutput}`,
+    }
+  }
+
+  test("does nothing when preserveLastN covers all messages", () => {
     const messages = [makeMsg("a", "user"), makeMsg("b", "assistant")]
-    const result = applyPruning(messages, 0, 0)
-    expect(result.prunedCount).toBe(0)
-    expect(result.injectedCount).toBe(0)
+    // preserveLastN=2 → both messages preserved → nothing compressed
+    const result = applyPlaceholderCompression(messages, 2, storage)
+    expect(result.compressedCount).toBe(0)
     expect(messages.length).toBe(2)
+    expect(messages[0].content).toBe("content of a")
   })
 
-  test("applyPruning: prunes messages inside block range and injects summary", () => {
+  test("replaces messages before preserveLastN cutoff with placeholders, keeps array length", () => {
     const messages = [
       makeMsg("start", "user"),
       makeMsg("mid1", "assistant"),
       makeMsg("mid2", "assistant"),
       makeMsg("end", "system"),
     ]
-    createBlock("test block", "start", "end", "compressed summary", 10, ["mid1", "mid2"], [], [])
+    // preserveLastN=2 → msg[0], msg[1] compressed, msg[2], msg[3] preserved
+    const result = applyPlaceholderCompression(messages, 2, storage)
+    expect(result.compressedCount).toBe(2)
+    // Array length unchanged
+    expect(messages.length).toBe(4)
 
-    const result = applyPruning(messages, 0, 0)
-    expect(result.prunedCount).toBeGreaterThan(0)
-    expect(result.injectedCount).toBe(1)
-    // Summary message should be injected
-    const summaryMsg = messages.find(m => m.id.startsWith("__dcp_summary_"))
-    expect(summaryMsg).toBeDefined()
-    expect(summaryMsg!.content).toContain("compressed summary")
+    // Original content stored in storage under position-based IDs
+    const keys = Object.keys(storage.compressedMessages)
+    expect(keys.length).toBe(2)
+
+    // Message content replaced with placeholder for first 2
+    // (msg[0] is user → "Compressed user message:", msg[1] is assistant → "[Compressed:")
+    expect(messages[0].content).toContain("Compressed user message")
+    expect(messages[1].content).toContain("[Compressed:")
+    // Preserved messages keep their content
+    expect(messages[2].content).toBe("content of mid2")
+    expect(messages[3].content).toBe("content of end")
   })
 
-  test("applyPruning: respects preserveLastN and does not prune recent messages", () => {
+  test("replaces tool outputs with placeholder", () => {
     const messages = [
-      makeMsg("s", "user"),
-      makeMsg("a", "assistant"),
-      makeMsg("b", "assistant"),
-      makeMsg("e", "system"),
+      makeMsg("user1", "user"),
+      makeToolMsg("tool1", "very long tool output that should be compressed"),
+      makeMsg("assistant1", "assistant"),
     ]
-    createBlock("block", "s", "e", "summary", 10, ["a", "b"], [], [])
+    // preserveLastN=1 → first 2 compressed
+    const result = applyPlaceholderCompression(messages, 1, storage)
+    expect(result.compressedCount).toBe(2)
 
-    const result = applyPruning(messages, 2) // preserve last 2 (b, e)
-    expect(result.prunedCount).toBe(0) // block overlaps preserved zone, no scoring so skip
-    expect(result.injectedCount).toBe(0)
+    const toolMsg = messages[1]
+    expect(toolMsg.parts[0].state.output).toBe("[Old tool result content cleared]")
   })
 
-  test("pruning: protected tools (task) are not pruned", () => {
-    const messages = [
-      makeMsg("start", "user"),
-      { id: "task1", role: "tool", parts: [{ type: "tool", tool: "task" }], content: "task output" },
-      makeMsg("end", "assistant"),
-    ]
-    createBlock("block", "start", "end", "summary", 10, ["task1"], [], [])
-
-    const result = applyPruning(messages, 0, 0)
-    expect(result.prunedCount).toBe(0) // protected tool inside block → skip
-  })
-
-  test("pruning: important context markers are protected from pruning", () => {
-    const messages = [
-      makeMsg("start", "user"),
-      { id: "mid", role: "assistant", content: "DECISION: keep API compatible and avoid breaking clients" },
-      makeMsg("end", "assistant"),
-    ]
-
-    createBlock("block", "start", "end", "summary", 10, ["mid"], [], [])
-
-    const result = applyPruning(messages, 0, 0)
-    expect(result.prunedCount).toBe(0)
-    expect(messages.some((m) => m.id === "mid")).toBe(true)
-  })
-
-  test("pruning: scoring threshold preserves high-impact messages", () => {
+  test("restoreMessageContent recovers original content", () => {
     const messages = [
       makeMsg("msg1", "user"),
-      {...makeMsg("msg2", "assistant"), content: "urgent fix needed crash"},
-      makeMsg("msg3", "assistant"),
-      makeMsg("msg4", "system"),
+      makeMsg("msg2", "assistant", "original important content"),
+      makeMsg("msg3", "system"),
     ]
-    createBlock("block", "msg1", "msg4", "summary", 10, ["msg2", "msg3"], [], [])
+    // preserveLastN=1 → first 2 compressed
+    applyPlaceholderCompression(messages, 1, storage)
 
-    const result = applyPruning(messages, 0, 0.45) // scoring on, threshold 0.45
-    // "urgent fix crash" should be scored high enough to keep
-    const prunedIds = messages.filter(m => !["msg1", "msg2", "msg3", "msg4"].includes(m.id))
+    expect(messages[1].content).toContain("[Compressed:")
+
+    // Restore by position-based ID (total=3, index=1 → pos=1)
+    const posId = "up_pos_1"
+    expect(storage.compressedMessages[posId]).toBeDefined()
+
+    const restored = restoreMessageContent(posId, messages[1], storage)
+    expect(restored).toBe(true)
+    expect(messages[1].content).toBe("original important content")
   })
+
+  test("placeholder for assistant vs user messages differs in wording", () => {
+    const messages = [
+      makeMsg("user1", "user"),
+      makeMsg("asst1", "assistant"),
+    ]
+    // preserveLastN=0 → all compressed
+    applyPlaceholderCompression(messages, 0, storage)
+
+    expect(messages[0].content).toContain("Compressed user message")
+    expect(messages[1].content).toContain("Compressed:")
+  })
+
+  test("respects preserveLastN: last N messages kept intact", () => {
+    const messages = [
+      makeMsg("a", "user"),
+      makeMsg("b", "assistant"),
+      makeMsg("c", "user"),
+      makeMsg("d", "assistant"),
+    ]
+    // preserveLastN=3 → only first message compressed
+    const result = applyPlaceholderCompression(messages, 3, storage)
+    expect(result.compressedCount).toBe(1)
+    expect(messages[0].content).toContain("[Compressed")
+    expect(messages[1].content).toBe("content of b")
+    expect(messages[2].content).toBe("content of c")
+    expect(messages[3].content).toBe("content of d")
+    expect(Object.keys(storage.compressedMessages).length).toBe(1)
+  })
+
+  test("preserveLastN=0 compresses all non-system messages", () => {
+    const messages = [
+      makeMsg("a", "user"),
+      makeMsg("b", "assistant"),
+      makeMsg("c", "user"),
+      makeMsg("d", "assistant"),
+    ]
+    const result = applyPlaceholderCompression(messages, 0, storage)
+    expect(result.compressedCount).toBe(4)
+    expect(messages.every(m => m.content.startsWith("[Compressed"))).toBe(true)
+  })
+
+  test("does not compress system/context role messages", () => {
+    const messages = [
+      makeMsg("a", "system"),
+      makeMsg("b", "context"),
+      makeMsg("c", "user"),
+    ]
+    const result = applyPlaceholderCompression(messages, 0, storage)
+    // Only the user message should be compressed (2 system/context skipped)
+    expect(result.compressedCount).toBe(1)
+  })
+
+
 
   test("block ID generation: creates unique IDs after reset", () => {
     resetCompressionState()
