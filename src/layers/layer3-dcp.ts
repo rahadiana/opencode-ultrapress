@@ -5,7 +5,7 @@
  * Called from the chat.message hook when token limits are exceeded.
  */
 
-import type { SummarizationConfig, SessionStats } from "../config/schema.js"
+import type { SummarizationConfig } from "../config/schema.js"
 import { createBlock, isMessageCompressed } from "../dcp/compress-state.js"
 import { estimateTokens } from "../utils/token-count.js"
 import * as logger from "../utils/logger.js"

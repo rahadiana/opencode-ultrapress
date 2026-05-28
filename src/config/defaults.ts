@@ -31,6 +31,7 @@ export const DEFAULT_CONFIG: UltraPressConfig = {
   summarization: {
     enabled: true,
     preserveLastN: 4,
+    scoreThreshold: 0.45,
   },
 
   // Layer 4 - Auto Cleanup

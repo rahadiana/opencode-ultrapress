@@ -52,6 +52,8 @@ export interface SummarizationConfig {
   enabled: boolean
   /** Preserve last N messages from placeholder compression (0 = compress all) */
   preserveLastN: number
+  /** Score threshold for extended zone pruning (0.0–1.0). Higher = fewer messages compressed */
+  scoreThreshold: number
 }
 
 export interface CleanupConfig {
