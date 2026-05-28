@@ -5,7 +5,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [0.2.14] — 2026-05-28
+## [0.2.15] — 2026-05-28
 
 ### Changed
 - Rewrote README with comprehensive architecture docs, file map, changelog
